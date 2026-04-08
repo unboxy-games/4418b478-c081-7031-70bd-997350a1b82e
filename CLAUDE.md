@@ -34,4 +34,8 @@
 - **SPACE** / **UP arrow** / **click** / **tap** — jump (only when grounded)
 
 ## What Changed This Turn
-- Increased scroll speed from 300 px/s to 450 px/s for a faster, more Geometry Dash-like feel
+- Death no longer auto-restarts; shows a pause screen with "YOU DIED" + "Tap / Click to Restart"
+- Restart prompt has bounce-in tween for header, pulsing restart label, dark overlay
+- 500 ms grace window prevents the death-tap from instantly triggering restart
+- Added `waitingForRestart` flag and `showRestartPrompt()` to `GameScene.ts`
+- `buildInput()` now uses a shared `doAction()` handler that checks the flag

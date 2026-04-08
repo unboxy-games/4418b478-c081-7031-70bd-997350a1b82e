@@ -48,21 +48,23 @@ export class GameScene extends Phaser.Scene {
   private deathFx!:      Phaser.GameObjects.Particles.ParticleEmitter;
   private dustFx!:       Phaser.GameObjects.Particles.ParticleEmitter;
 
-  private alive       = true;
-  private attempt     = 1;
-  private wasGrounded = false;
-  private cubeRot     = 0;
-  private jumpsLeft   = 2;   // 2 = both jumps available, 0 = no jumps left
+  private alive              = true;
+  private attempt            = 1;
+  private wasGrounded        = false;
+  private cubeRot            = 0;
+  private jumpsLeft          = 2;   // 2 = both jumps available, 0 = no jumps left
+  private waitingForRestart  = false;
 
   constructor() { super({ key: 'GameScene' }); }
 
   // ── lifecycle ──────────────────────────────────────────────────────────────
 
   create(): void {
-    this.alive       = true;
-    this.cubeRot     = 0;
-    this.wasGrounded = false;
-    this.jumpsLeft   = 2;
+    this.alive              = true;
+    this.cubeRot            = 0;
+    this.wasGrounded        = false;
+    this.jumpsLeft          = 2;
+    this.waitingForRestart  = false;
     this.attempt     = (this.game.registry.get('attempt') as number) ?? 1;
 
     this.physics.world.setBounds(0, 0, WORLD_W, GAME_HEIGHT);
@@ -416,9 +418,13 @@ export class GameScene extends Phaser.Scene {
 
   private buildInput(): void {
     const kb = this.input.keyboard!;
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE).on('down', () => this.tryJump());
-    kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP).on('down',    () => this.tryJump());
-    this.input.on('pointerdown', () => this.tryJump());
+    const doAction = () => {
+      if (this.waitingForRestart) { this.scene.restart(); return; }
+      this.tryJump();
+    };
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE).on('down', doAction);
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP).on('down',    doAction);
+    this.input.on('pointerdown', doAction);
   }
 
   // ── gameplay ───────────────────────────────────────────────────────────────
@@ -467,7 +473,64 @@ export class GameScene extends Phaser.Scene {
 
     // Persist incremented attempt count across the restart
     this.game.registry.set('attempt', this.attempt + 1);
-    this.time.delayedCall(900, () => this.scene.restart());
+
+    // Show restart screen after effects settle
+    this.time.delayedCall(650, () => this.showRestartPrompt());
+  }
+
+  private showRestartPrompt(): void {
+    // Semi-transparent dark overlay (camera-fixed)
+    const overlay = this.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.6)
+      .setScrollFactor(0).setDepth(28).setAlpha(0);
+
+    // "YOU DIED" header
+    const deathTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 60, 'YOU DIED', {
+      fontSize: '60px', color: '#ff3333', fontStyle: 'bold',
+      fontFamily: 'Arial', stroke: '#000000', strokeThickness: 7,
+    }).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0).setScale(0.4);
+
+    // Attempt label
+    const attemptNum = this.game.registry.get('attempt') as number;
+    const attemptLbl = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 10,
+      `Attempt ${attemptNum - 1}`, {
+        fontSize: '22px', color: '#aabbdd',
+        fontFamily: 'Arial', stroke: '#000022', strokeThickness: 4,
+      }
+    ).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0);
+
+    // "Tap or click to restart" prompt
+    const restartTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 58,
+      'Tap  /  Click  to  Restart', {
+        fontSize: '26px', color: '#ffffff',
+        fontFamily: 'Arial', stroke: '#000033', strokeThickness: 4,
+      }
+    ).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0);
+
+    // Fade in overlay
+    this.tweens.add({ targets: overlay, alpha: 1, duration: 350 });
+
+    // Bounce in "YOU DIED"
+    this.tweens.add({
+      targets: deathTxt, alpha: 1, scale: 1,
+      ease: 'Back.Out', duration: 550,
+    });
+
+    // Slide + fade in sub-labels
+    this.tweens.add({ targets: attemptLbl, alpha: 1, delay: 350, duration: 400 });
+    this.tweens.add({ targets: restartTxt, alpha: 1, delay: 550, duration: 400 });
+
+    // Pulse the restart label
+    this.tweens.add({
+      targets: restartTxt, alpha: 0.25,
+      yoyo: true, repeat: -1,
+      duration: 650, delay: 1050,
+      ease: 'Sine.easeInOut',
+    });
+
+    // Allow restart input — delayed slightly to prevent the death-tap from
+    // immediately triggering a restart
+    this.time.delayedCall(500, () => { this.waitingForRestart = true; });
   }
 
   private onWin(): void {
