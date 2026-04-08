@@ -52,6 +52,7 @@ export class GameScene extends Phaser.Scene {
   private attempt     = 1;
   private wasGrounded = false;
   private cubeRot     = 0;
+  private jumpsLeft   = 2;   // 2 = both jumps available, 0 = no jumps left
 
   constructor() { super({ key: 'GameScene' }); }
 
@@ -61,6 +62,7 @@ export class GameScene extends Phaser.Scene {
     this.alive       = true;
     this.cubeRot     = 0;
     this.wasGrounded = false;
+    this.jumpsLeft   = 2;
     this.attempt     = (this.game.registry.get('attempt') as number) ?? 1;
 
     this.physics.world.setBounds(0, 0, WORLD_W, GAME_HEIGHT);
@@ -99,8 +101,9 @@ export class GameScene extends Phaser.Scene {
       const snap = Math.round(this.cubeRot / 90) * 90;
       this.cubeRot += (snap - this.cubeRot) * 0.35;
 
-      // dust burst on the first grounded frame
+      // first grounded frame: refill jumps + dust burst
       if (!this.wasGrounded) {
+        this.jumpsLeft = 2;
         this.dustFx.setPosition(this.player.x, GROUND_TOP - 4);
         this.dustFx.explode(8);
       }
@@ -422,9 +425,31 @@ export class GameScene extends Phaser.Scene {
 
   private tryJump(): void {
     if (!this.alive) return;
-    const body = this.player.body as Phaser.Physics.Arcade.Body;
-    if (body.blocked.down) {
-      body.setVelocityY(JUMP_VEL);
+    if (this.jumpsLeft <= 0) return;
+
+    const body        = this.player.body as Phaser.Physics.Arcade.Body;
+    const isFirstJump = body.blocked.down;   // standing on ground
+
+    // consume a jump and launch upward
+    this.jumpsLeft--;
+    body.setVelocityY(JUMP_VEL);
+
+    if (!isFirstJump) {
+      // ── double-jump visual feedback ──
+
+      // quick scale pulse: cube squishes then pops
+      this.tweens.add({
+        targets:  this.player,
+        scaleX:   1.35,
+        scaleY:   0.70,
+        duration: 70,
+        yoyo:     true,
+        ease:     'Sine.easeOut',
+      });
+
+      // cyan ring-burst from cube centre
+      this.dustFx.setPosition(this.player.x, this.player.y);
+      this.dustFx.explode(12);
     }
   }
 

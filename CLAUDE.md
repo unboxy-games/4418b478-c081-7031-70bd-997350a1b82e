@@ -7,7 +7,7 @@
 
 ## Features Implemented
 - Auto-scrolling player cube (speed = 300 px/s) with arcade physics gravity
-- Jump mechanic (SPACE, UP arrow, or mouse/touch click) — only fires when grounded
+- Double-jump mechanic (SPACE, UP arrow, or mouse/touch click) — 2 jumps per airborne cycle; refills on landing
 - Spinning cube animation: rotates 216°/s in the air, snaps to nearest 90° on landing
 - 47 handcrafted obstacles across 13 000px level: single spikes → double → triple → block obstacles → intense mixed sections
 - Reduced spike hitboxes for fairness (40×38 vs 60×60 visual)
@@ -34,8 +34,6 @@
 - **SPACE** / **UP arrow** / **click** / **tap** — jump (only when grounded)
 
 ## What Changed This Turn
-- Tuned physics for snappy Geometry Dash feel:
-  - SPEED: 380 → 300 px/s (map no longer blurs past)
-  - GRAVITY: 1600 → 2800 (cube snaps back down quickly)
-  - JUMP_VEL: -760 → -900 (maintains ~144px max height ≈ 2.4 blocks)
-  - Air time drops from 0.95 s to 0.64 s; horizontal jump covers ~3 blocks instead of 6
+- Added double-jump: `jumpsLeft` counter (max 2) consumed per jump, refilled on landing
+- Double-jump fires a scale-squish tween (1.35x wide → snap back) + dustFx particle burst at cube position for clear mid-air feedback
+- `jumpsLeft` initialised in `create()` and reset to 2 on each landing frame
