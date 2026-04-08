@@ -24,7 +24,7 @@
 ## Key Implementation Details
 - **GameScene.ts** — all game logic (background, ground, level, player, particles, HUD, camera, input)
 - **UIScene.ts** — intentionally empty; GameScene handles all HUD via `setScrollFactor(0)`
-- **Ground physics**: single `Phaser.Physics.Arcade.Image` (invisible, 13 000 × 150 px static body)
+- **Ground physics**: `add.rectangle` (13 000 × 150 px) + `physics.add.existing(rect, true)` for a reliable static body — body dimensions come directly from the Rectangle's width/height
 - **Obstacle group**: `this.physics.add.staticGroup()` — obstacles created with `obstacles.create()`
 - **Textures**: all generated programmatically via `this.make.graphics({}, false)` + `generateTexture`
 - **Parallax**: TileSprites with `setScrollFactor(0)`; `tilePositionX` driven by `camera.scrollX * factor` each frame
@@ -34,4 +34,5 @@
 - **SPACE** / **UP arrow** / **click** / **tap** — jump (only when grounded)
 
 ## What Changed This Turn
-- Full initial implementation of the Geometry Dash–style game from scratch.
+- Fixed ground collider: replaced unreliable `staticImage + setSize` with `add.rectangle + physics.add.existing(rect, true)`; body dimensions now derived directly from the Rectangle's width/height
+- Added fall-off death check: if player.y > GAME_HEIGHT + 100, `onDeath()` is called so the level restarts instead of scrolling endlessly with no player

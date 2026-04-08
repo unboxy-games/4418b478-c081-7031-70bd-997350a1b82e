@@ -38,7 +38,7 @@ const LEVEL: [number, OType, number][] = [
 
 export class GameScene extends Phaser.Scene {
   private player!:       Phaser.Physics.Arcade.Image;
-  private groundStatic!: Phaser.Physics.Arcade.Image;
+  private groundStatic!: Phaser.GameObjects.Rectangle;
   private obstacles!:    Phaser.Physics.Arcade.StaticGroup;
 
   private bgLayers:      Phaser.GameObjects.TileSprite[] = [];
@@ -120,6 +120,9 @@ export class GameScene extends Phaser.Scene {
 
     // ── win check ──
     if (this.player.x >= WORLD_W - 300) this.onWin();
+
+    // ── fall-off check: treat dropping below the screen as a death ──
+    if (this.player.y > GAME_HEIGHT + 100) this.onDeath();
   }
 
   // ── texture generation ────────────────────────────────────────────────────
@@ -269,14 +272,15 @@ export class GameScene extends Phaser.Scene {
     glow.lineStyle(10, 0x0d3399, 0.2);
     glow.lineBetween(0, GROUND_TOP, WORLD_W, GROUND_TOP);
 
-    // Invisible physics body spanning the full world width
-    this.groundStatic = this.physics.add
-      .staticImage(WORLD_W / 2, GROUND_TOP + GROUND_H / 2, 'pixel')
+    // Invisible static physics body spanning the full world width.
+    // Using add.rectangle + physics.add.existing so the body dimensions
+    // are derived directly from the Rectangle's width/height — much more
+    // reliable than manually calling setSize on a tiny staticImage.
+    this.groundStatic = this.add
+      .rectangle(WORLD_W / 2, GROUND_TOP + GROUND_H / 2, WORLD_W, GROUND_H)
       .setAlpha(0)
       .setDepth(5);
-    (this.groundStatic.body as Phaser.Physics.Arcade.StaticBody)
-      .setSize(WORLD_W, GROUND_H);
-    this.groundStatic.refreshBody();
+    this.physics.add.existing(this.groundStatic, true); // true = static body
   }
 
   // ── level obstacles ────────────────────────────────────────────────────────
