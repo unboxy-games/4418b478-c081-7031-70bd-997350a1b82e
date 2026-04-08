@@ -6,7 +6,7 @@
 - **Core mechanic**: Auto-scrolling cube that the player jumps over obstacles. One button (SPACE / click / tap) to jump. Touch a spike or block = instant death and retry.
 
 ## Features Implemented
-- Auto-scrolling player cube (speed = 300 px/s) with arcade physics gravity
+- Auto-scrolling player cube (speed = 450 px/s) with arcade physics gravity
 - Double-jump mechanic (SPACE, UP arrow, or mouse/touch click) — 2 jumps per airborne cycle; refills on landing
 - Spinning cube animation: rotates 216°/s in the air, snaps to nearest 90° on landing
 - 47 handcrafted obstacles across 13 000px level: single spikes → double → triple → block obstacles → intense mixed sections
@@ -34,6 +34,4 @@
 - **SPACE** / **UP arrow** / **click** / **tap** — jump (only when grounded)
 
 ## What Changed This Turn
-- Added double-jump: `jumpsLeft` counter (max 2) consumed per jump, refilled on landing
-- Double-jump fires a scale-squish tween (1.35x wide → snap back) + dustFx particle burst at cube position for clear mid-air feedback
-- `jumpsLeft` initialised in `create()` and reset to 2 on each landing frame
+- Increased scroll speed from 300 px/s to 450 px/s for a faster, more Geometry Dash-like feel

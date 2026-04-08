@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const SPEED      = 300;               // auto-scroll px/s  (slowed for readability)
+const SPEED      = 450;               // auto-scroll px/s
 const JUMP_VEL   = -900;              // upward velocity on jump
 const GRAVITY    = 2800;              // world gravity (high = snappy GD-style fall)
 const GROUND_TOP = GAME_HEIGHT - 150; // y=570, top surface of ground
