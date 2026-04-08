@@ -6,7 +6,7 @@
 - **Core mechanic**: Auto-scrolling cube that the player jumps over obstacles. One button (SPACE / click / tap) to jump. Touch a spike or block = instant death and retry.
 
 ## Features Implemented
-- Auto-scrolling player cube (speed = 380 px/s) with arcade physics gravity
+- Auto-scrolling player cube (speed = 300 px/s) with arcade physics gravity
 - Jump mechanic (SPACE, UP arrow, or mouse/touch click) — only fires when grounded
 - Spinning cube animation: rotates 216°/s in the air, snaps to nearest 90° on landing
 - 47 handcrafted obstacles across 13 000px level: single spikes → double → triple → block obstacles → intense mixed sections
@@ -34,5 +34,8 @@
 - **SPACE** / **UP arrow** / **click** / **tap** — jump (only when grounded)
 
 ## What Changed This Turn
-- Fixed ground collider: replaced unreliable `staticImage + setSize` with `add.rectangle + physics.add.existing(rect, true)`; body dimensions now derived directly from the Rectangle's width/height
-- Added fall-off death check: if player.y > GAME_HEIGHT + 100, `onDeath()` is called so the level restarts instead of scrolling endlessly with no player
+- Tuned physics for snappy Geometry Dash feel:
+  - SPEED: 380 → 300 px/s (map no longer blurs past)
+  - GRAVITY: 1600 → 2800 (cube snaps back down quickly)
+  - JUMP_VEL: -760 → -900 (maintains ~144px max height ≈ 2.4 blocks)
+  - Air time drops from 0.95 s to 0.64 s; horizontal jump covers ~3 blocks instead of 6
