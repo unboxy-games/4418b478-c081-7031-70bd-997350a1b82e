@@ -32,10 +32,12 @@
 
 ## Controls
 - **SPACE** / **UP arrow** / **click** / **tap** — jump (only when grounded)
+- **ESC** — toggle pause
 
 ## What Changed This Turn
-- Death no longer auto-restarts; shows a pause screen with "YOU DIED" + "Tap / Click to Restart"
-- Restart prompt has bounce-in tween for header, pulsing restart label, dark overlay
-- 500 ms grace window prevents the death-tap from instantly triggering restart
-- Added `waitingForRestart` flag and `showRestartPrompt()` to `GameScene.ts`
-- `buildInput()` now uses a shared `doAction()` handler that checks the flag
+- Added pause button (❙❙/▶ icon) in the HUD top-right corner
+- ESC key also toggles pause; clicking anywhere on the pause screen also resumes
+- `togglePause()` pauses Arcade physics and shows/hides overlay
+- `update()` now guarded by `isPaused` flag so movement stops
+- `buildPauseButton()` + `drawPauseIcon()` handle button drawing and icon swap
+- Cannot pause during death or win screens (`alive` guard in `togglePause`)

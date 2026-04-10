@@ -54,6 +54,11 @@ export class GameScene extends Phaser.Scene {
   private cubeRot            = 0;
   private jumpsLeft          = 2;   // 2 = both jumps available, 0 = no jumps left
   private waitingForRestart  = false;
+  private isPaused           = false;
+  private pauseContents:     Phaser.GameObjects.GameObject[] = [];
+  private pauseBtnX          = 0;
+  private pauseBtnY          = 0;
+  private pauseIconGfx!:     Phaser.GameObjects.Graphics;
 
   constructor() { super({ key: 'GameScene' }); }
 
@@ -65,6 +70,8 @@ export class GameScene extends Phaser.Scene {
     this.wasGrounded        = false;
     this.jumpsLeft          = 2;
     this.waitingForRestart  = false;
+    this.isPaused           = false;
+    this.pauseContents      = [];
     this.attempt     = (this.game.registry.get('attempt') as number) ?? 1;
 
     this.physics.world.setBounds(0, 0, WORLD_W, GAME_HEIGHT);
@@ -86,7 +93,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_t: number, dt: number): void {
-    if (!this.alive) return;
+    if (!this.alive || this.isPaused) return;
 
     const body     = this.player.body as Phaser.Physics.Arcade.Body;
     const grounded = body.blocked.down;
@@ -395,6 +402,9 @@ export class GameScene extends Phaser.Scene {
       fontStyle: 'bold', stroke: '#000033', strokeThickness: 3,
     }).setScrollFactor(0).setDepth(22).setOrigin(0.5, 0);
 
+    // Pause button (top-right corner)
+    this.buildPauseButton();
+
     // Controls hint (fades after 3 s)
     const hint = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 36,
       'SPACE / Click to Jump', {
@@ -418,13 +428,23 @@ export class GameScene extends Phaser.Scene {
 
   private buildInput(): void {
     const kb = this.input.keyboard!;
-    const doAction = () => {
+
+    const doAction = (ptr?: Phaser.Input.Pointer) => {
+      // Check if the click landed on the pause button
+      if (ptr) {
+        const dx = Math.abs(ptr.x - this.pauseBtnX);
+        const dy = Math.abs(ptr.y - this.pauseBtnY);
+        if (dx <= 22 && dy <= 18) { this.togglePause(); return; }
+      }
+      if (this.isPaused) { this.togglePause(); return; } // click anywhere else = unpause
       if (this.waitingForRestart) { this.scene.restart(); return; }
       this.tryJump();
     };
+
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE).on('down', doAction);
     kb.addKey(Phaser.Input.Keyboard.KeyCodes.UP).on('down',    doAction);
-    this.input.on('pointerdown', doAction);
+    kb.addKey(Phaser.Input.Keyboard.KeyCodes.ESC).on('down', () => this.togglePause());
+    this.input.on('pointerdown', (ptr: Phaser.Input.Pointer) => doAction(ptr));
   }
 
   // ── gameplay ───────────────────────────────────────────────────────────────
@@ -457,6 +477,94 @@ export class GameScene extends Phaser.Scene {
       this.dustFx.setPosition(this.player.x, this.player.y);
       this.dustFx.explode(12);
     }
+  }
+
+  // ── pause button ──────────────────────────────────────────────────────────
+
+  private buildPauseButton(): void {
+    const bx = GAME_WIDTH - 38;
+    const by = 52;
+    this.pauseBtnX = bx;
+    this.pauseBtnY = by;
+
+    // Button background
+    const bg = this.add.graphics().setScrollFactor(0).setDepth(25);
+    bg.fillStyle(0x001133, 0.75);
+    bg.fillRoundedRect(bx - 18, by - 14, 36, 28, 6);
+    bg.lineStyle(1.5, 0x3366aa, 0.8);
+    bg.strokeRoundedRect(bx - 18, by - 14, 36, 28, 6);
+
+    // Pause / play icon (drawn separately so we can swap it)
+    this.pauseIconGfx = this.add.graphics().setScrollFactor(0).setDepth(26);
+    this.drawPauseIcon(true); // show "pause" bars (game is running)
+
+    // Subtle hover highlight
+    this.tweens.add({
+      targets: bg, alpha: 0.75,
+      yoyo: true, repeat: -1, duration: 1800, ease: 'Sine.easeInOut',
+    });
+  }
+
+  private drawPauseIcon(showPauseBars: boolean): void {
+    const bx = this.pauseBtnX;
+    const by = this.pauseBtnY;
+    this.pauseIconGfx.clear();
+    this.pauseIconGfx.fillStyle(0x88bbff, 1);
+    if (showPauseBars) {
+      // ❙❙ two vertical bars
+      this.pauseIconGfx.fillRect(bx - 8, by - 6, 5, 12);
+      this.pauseIconGfx.fillRect(bx + 3, by - 6, 5, 12);
+    } else {
+      // ▶ play triangle
+      this.pauseIconGfx.fillTriangle(bx - 6, by - 7, bx - 6, by + 7, bx + 9, by);
+    }
+  }
+
+  private togglePause(): void {
+    if (!this.alive) return; // no pause during death / win screens
+    this.isPaused = !this.isPaused;
+    this.drawPauseIcon(!this.isPaused); // bars = running, triangle = paused
+
+    if (this.isPaused) {
+      this.physics.pause();
+      this.showPauseOverlay();
+    } else {
+      this.physics.resume();
+      this.destroyPauseOverlay();
+    }
+  }
+
+  private showPauseOverlay(): void {
+    const overlay = this.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000011, 0.65)
+      .setScrollFactor(0).setDepth(27).setAlpha(0);
+
+    const pauseTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 55, 'PAUSED', {
+      fontSize: '68px', color: '#ffffff', fontStyle: 'bold',
+      fontFamily: 'Arial', stroke: '#001133', strokeThickness: 9,
+    }).setScrollFactor(0).setDepth(29).setOrigin(0.5).setAlpha(0).setScale(0.4);
+
+    const resumeTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 28,
+      'ESC  /  Click to Resume', {
+        fontSize: '24px', color: '#aaccff',
+        fontFamily: 'Arial', stroke: '#000022', strokeThickness: 3,
+      }
+    ).setScrollFactor(0).setDepth(29).setOrigin(0.5).setAlpha(0);
+
+    this.pauseContents = [overlay, pauseTxt, resumeTxt];
+
+    this.tweens.add({ targets: overlay,    alpha: 1,   duration: 220 });
+    this.tweens.add({ targets: pauseTxt,   alpha: 1, scale: 1, ease: 'Back.Out', duration: 420 });
+    this.tweens.add({ targets: resumeTxt,  alpha: 1,   delay: 220, duration: 350 });
+    this.tweens.add({
+      targets: resumeTxt, alpha: 0.25,
+      yoyo: true, repeat: -1, duration: 700, delay: 700, ease: 'Sine.easeInOut',
+    });
+  }
+
+  private destroyPauseOverlay(): void {
+    this.pauseContents.forEach(obj => obj.destroy());
+    this.pauseContents = [];
   }
 
   private onDeath(): void {
