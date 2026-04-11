@@ -309,19 +309,22 @@ export class GameScene extends Phaser.Scene {
         const img = this.obstacles.create(ox, oy, key) as Phaser.Physics.Arcade.Image;
         img.setDepth(7);
 
-        // Spike hitbox = inner rectangle of the triangle.
-        // Texture: fillTriangle(B/2, 1,  B-1, B,  1, B)
-        //   left edge at height y:  x = 1 + y * 0.492
-        //   right edge at height y: x = 59 - y * 0.492
-        // A 16 px wide rect centred at x=30 fits inside the triangle all the
-        // way down to y≈42 (16 ≤ 58 - 42*0.984).  We start 2 px from the tip
-        // so the rect is 16 × 40 px, offset (22, 2) from the texture origin.
         const body = img.body as Phaser.Physics.Arcade.StaticBody;
         if (type === 's') {
-          body.setSize(16, 40);   // inner rectangle of the triangle
-          body.setOffset(22, 2);  // 22 = (60-16)/2 centres it; 2 = near the tip
+          // Scale spike down visually; reposition so its base still sits on ground
+          const sc  = 0.65;
+          const sw  = B * sc;                        // scaled display size ≈ 39 px
+          img.setScale(sc);
+          img.setY(GROUND_TOP - sw / 2);             // bottom of scaled sprite = GROUND_TOP
+
+          // Inner rectangle of the scaled triangle, in world pixels:
+          //   unscaled inner rect = 16×40; scaled = ~10×26
+          const bw = Math.round(16 * sc);            // 10 px wide
+          const bh = Math.round(40 * sc);            // 26 px tall
+          body.setSize(bw, bh);
+          body.setOffset((sw - bw) / 2, 2);          // centred horizontally, 2 px from tip
         } else {
-          body.setSize(B - 10, B - 10); // 50×50 — small inset for blocks
+          body.setSize(B - 10, B - 10);              // 50×50 — small inset for blocks
           body.setOffset(5, 5);
         }
         img.refreshBody();
