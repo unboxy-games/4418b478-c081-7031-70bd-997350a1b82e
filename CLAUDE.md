@@ -10,7 +10,7 @@
 - Double-jump mechanic (SPACE, UP arrow, or mouse/touch click) — 2 jumps per airborne cycle; refills on landing
 - Spinning cube animation: rotates 216°/s in the air, snaps to nearest 90° on landing
 - 47 handcrafted obstacles across 13 000px level: single spikes → double → triple → block obstacles → intense mixed sections
-- Forgiving hitboxes: spikes use ~27×33 px centred on the tip (vs 60×60 visual); blocks use 50×50
+- Spike hitbox = true inner rectangle of the triangle: 16×40 px centred on the tip (vs 60×60 visual); blocks use 50×50
 - Dust particle burst on landing, blue square particle explosion on death
 - Camera shake + red flash on death
 - Parallax background: 3 TileSprite layers (far/mid/near) with different scroll speeds
@@ -35,4 +35,4 @@
 - **ESC** — toggle pause
 
 ## What Changed This Turn
-- Added forgiving hitboxes: spike body is ~27×33 px (45%×55% of tile) centred on the tip, block body is 50×50; much more lenient than the full 60×60 bounding box
+- Spike hitbox replaced with a mathematically derived inner rectangle (16×40 px, offset 22,2) that sits entirely inside the triangle shape; blocks keep a 50×50 inset

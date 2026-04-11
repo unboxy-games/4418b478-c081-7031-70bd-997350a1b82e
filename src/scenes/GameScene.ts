@@ -309,15 +309,19 @@ export class GameScene extends Phaser.Scene {
         const img = this.obstacles.create(ox, oy, key) as Phaser.Physics.Arcade.Image;
         img.setDepth(7);
 
-        // Forgiving hitboxes: spikes are a triangle so a narrow rect centred
-        // on the tip is much fairer than the full 60×60 bounding box.
-        // Blocks get a small inset so grazing the corner doesn't kill you.
+        // Spike hitbox = inner rectangle of the triangle.
+        // Texture: fillTriangle(B/2, 1,  B-1, B,  1, B)
+        //   left edge at height y:  x = 1 + y * 0.492
+        //   right edge at height y: x = 59 - y * 0.492
+        // A 16 px wide rect centred at x=30 fits inside the triangle all the
+        // way down to y≈42 (16 ≤ 58 - 42*0.984).  We start 2 px from the tip
+        // so the rect is 16 × 40 px, offset (22, 2) from the texture origin.
         const body = img.body as Phaser.Physics.Arcade.StaticBody;
         if (type === 's') {
-          body.setSize(Math.round(B * 0.45), Math.round(B * 0.55)); // ~27×33 — very lenient
-          body.setOffset(Math.round(B * 0.275), Math.round(B * 0.3));
+          body.setSize(16, 40);   // inner rectangle of the triangle
+          body.setOffset(22, 2);  // 22 = (60-16)/2 centres it; 2 = near the tip
         } else {
-          body.setSize(B - 10, B - 10);                              // 50×50 — small inset
+          body.setSize(B - 10, B - 10); // 50×50 — small inset for blocks
           body.setOffset(5, 5);
         }
         img.refreshBody();
