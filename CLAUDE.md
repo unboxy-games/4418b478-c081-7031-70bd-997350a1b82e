@@ -10,7 +10,7 @@
 - Double-jump mechanic (SPACE, UP arrow, or mouse/touch click) — 2 jumps per airborne cycle; refills on landing
 - Spinning cube animation: rotates 216°/s in the air, snaps to nearest 90° on landing
 - 47 handcrafted obstacles across 13 000px level: single spikes → double → triple → block obstacles → intense mixed sections
-- Reduced spike hitboxes for fairness (40×38 vs 60×60 visual)
+- Obstacles use full natural texture hitboxes (no custom size overrides)
 - Dust particle burst on landing, blue square particle explosion on death
 - Camera shake + red flash on death
 - Parallax background: 3 TileSprite layers (far/mid/near) with different scroll speeds
@@ -35,9 +35,4 @@
 - **ESC** — toggle pause
 
 ## What Changed This Turn
-- Added pause button (❙❙/▶ icon) in the HUD top-right corner
-- ESC key also toggles pause; clicking anywhere on the pause screen also resumes
-- `togglePause()` pauses Arcade physics and shows/hides overlay
-- `update()` now guarded by `isPaused` flag so movement stops
-- `buildPauseButton()` + `drawPauseIcon()` handle button drawing and icon swap
-- Cannot pause during death or win screens (`alive` guard in `togglePause`)
+- Removed custom `body.setSize()` overrides from `buildLevel()` — obstacles now use their full natural texture hitboxes

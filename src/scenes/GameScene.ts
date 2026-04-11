@@ -308,14 +308,6 @@ export class GameScene extends Phaser.Scene {
 
         const img = this.obstacles.create(ox, oy, key) as Phaser.Physics.Arcade.Image;
         img.setDepth(7);
-
-        const body = img.body as Phaser.Physics.Arcade.StaticBody;
-        if (type === 's') {
-          body.setSize(B - 20, B - 22); // reduced hitbox for leniency on spike edges
-        } else {
-          body.setSize(B - 4, B - 4);
-        }
-        img.refreshBody();
       }
     });
   }
