@@ -543,6 +543,8 @@ export class GameScene extends Phaser.Scene {
     this.spawnExplosion(this.player.x, this.player.y, -1);
 
     if (this.lives <= 0) {
+      this.playerInvincible = true;
+      (this.player.body as Phaser.Physics.Arcade.Body).enable = false;
       this.player.setVisible(false);
       this.time.delayedCall(1600, () => this.showGameOver());
     } else {

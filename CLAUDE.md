@@ -42,5 +42,8 @@
 | Space | Fire / Restart (game over) |
 
 ## This Turn
-- Built full Galaxian-style game from scratch (GameScene.ts rewritten)
-- Updated UIScene.ts to show score, wave number, and mini life-ship icons
+- Fixed freeze bug in `hitPlayer()`: when lives hit 0, `playerInvincible` was never
+  set to `true`, so every enemy bullet that overlapped the invisible (but physics-active)
+  player kept calling `hitPlayer()` each frame — spawning explosions/tweens/events in an
+  unbounded loop that froze the game. Fix: set `playerInvincible = true` and disable the
+  physics body immediately when lives reach zero.
