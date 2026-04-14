@@ -84,12 +84,12 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.overlap(
       this.enemyBullets,
       this.player,
-      (b, _p) => this.onEnemyBulletHitPlayer(b as Phaser.Physics.Arcade.Sprite)
+      (_p, b) => this.onEnemyBulletHitPlayer(b as Phaser.Physics.Arcade.Sprite)
     );
     this.physics.add.overlap(
       this.enemyGroup,
       this.player,
-      (e, _p) => this.onEnemyHitPlayer(e as Phaser.Physics.Arcade.Sprite)
+      (_p, e) => this.onEnemyHitPlayer(e as Phaser.Physics.Arcade.Sprite)
     );
 
     // Launch HUD (stop first in case it's already running)
@@ -330,6 +330,7 @@ export class GameScene extends Phaser.Scene {
   //  Input
   // ─────────────────────────────────────────
   private handleInput(): void {
+    if (!this.player.body) return;
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     body.setVelocityX(0);
 

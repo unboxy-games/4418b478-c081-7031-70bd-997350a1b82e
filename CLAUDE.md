@@ -42,8 +42,11 @@
 | Space | Fire / Restart (game over) |
 
 ## This Turn
-- Fixed freeze bug in `hitPlayer()`: when lives hit 0, `playerInvincible` was never
-  set to `true`, so every enemy bullet that overlapped the invisible (but physics-active)
-  player kept calling `hitPlayer()` each frame — spawning explosions/tweens/events in an
-  unbounded loop that froze the game. Fix: set `playerInvincible = true` and disable the
-  physics body immediately when lives reach zero.
+- Fixed the true freeze bug: Phaser 3.80 `physics.add.overlap(group, sprite, cb)` internally
+  swaps args — `cb` receives `(sprite, groupMember)`, NOT `(groupMember, sprite)`.
+  The callbacks for `enemyBullets vs player` and `enemyGroup vs player` had `(b, _p)` /
+  `(e, _p)` which meant `b`/`e` was the **player**, not the bullet/enemy. Every hit called
+  `player.destroy()`, nulling `this.player.body` and crashing `handleInput()` every frame.
+  Fix: swapped destructuring to `(_p, b)` and `(_p, e)` so the second arg (the group member)
+  is correctly passed to the handler. Also added `if (!this.player.body) return` guard at the
+  top of `handleInput()` as a safety net.
