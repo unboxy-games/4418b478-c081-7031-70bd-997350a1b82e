@@ -3,7 +3,7 @@
 ## Game Overview
 - **Title**: Geometry Dash Clone
 - **Genre**: Auto-runner / rhythm platformer
-- **Core mechanic**: Auto-scrolling cube that the player jumps over obstacles. One button (SPACE / click / tap) to jump. Touch a spike or block = instant death and retry.
+- **Core mechanic**: Auto-scrolling cube that the player jumps over/onto obstacles. One button (SPACE / click / tap) to jump. Touch a spike or the side of a block = instant death. Land on top of a block = safe platform.
 
 ## Features Implemented
 - Auto-scrolling player cube (speed = 450 px/s) with arcade physics gravity
@@ -25,7 +25,7 @@
 - **GameScene.ts** — all game logic (background, ground, level, player, particles, HUD, camera, input)
 - **UIScene.ts** — intentionally empty; GameScene handles all HUD via `setScrollFactor(0)`
 - **Ground physics**: `add.rectangle` (13 000 × 150 px) + `physics.add.existing(rect, true)` for a reliable static body — body dimensions come directly from the Rectangle's width/height
-- **Obstacle group**: `this.physics.add.staticGroup()` — obstacles created with `obstacles.create()`
+- **Obstacle groups**: two static groups — `obstacles` (spikes, lethal overlap) and `platforms` (blocks, collider — land on top safely, lethal on side impact)
 - **Textures**: all generated programmatically via `this.make.graphics({}, false)` + `generateTexture`
 - **Parallax**: TileSprites with `setScrollFactor(0)`; `tilePositionX` driven by `camera.scrollX * factor` each frame
 - **Death persistence**: `this.game.registry.set('attempt', n)` before `scene.restart()`
@@ -35,4 +35,7 @@
 - **ESC** — toggle pause
 
 ## What Changed This Turn
-- Spikes scaled to 0.65 (≈39 px tall) with base re-anchored to GROUND_TOP; hitbox is the proportional inner rectangle of the scaled triangle (~10×26 px)
+- Blocks converted to platforms: land on top safely, die only on side impact (`body.blocked.right/left`)
+- Spikes remain lethal on any touch via `physics.add.overlap`
+- Blocks use a separate `platforms` StaticGroup with `physics.add.collider`
+- Dust burst spawn updated to `player.y + (B-8)/2` (player's feet) — works on elevated platforms too

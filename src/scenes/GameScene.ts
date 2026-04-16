@@ -39,7 +39,8 @@ const LEVEL: [number, OType, number][] = [
 export class GameScene extends Phaser.Scene {
   private player!:       Phaser.Physics.Arcade.Image;
   private groundStatic!: Phaser.GameObjects.Rectangle;
-  private obstacles!:    Phaser.Physics.Arcade.StaticGroup;
+  private obstacles!:    Phaser.Physics.Arcade.StaticGroup;  // spikes → lethal on any touch
+  private platforms!:    Phaser.Physics.Arcade.StaticGroup;  // blocks → land on top, lethal on side
 
   private bgLayers:      Phaser.GameObjects.TileSprite[] = [];
   private progressFill!: Phaser.GameObjects.Rectangle;
@@ -113,7 +114,9 @@ export class GameScene extends Phaser.Scene {
       // first grounded frame: refill jumps + dust burst
       if (!this.wasGrounded) {
         this.jumpsLeft = 2;
-        this.dustFx.setPosition(this.player.x, GROUND_TOP - 4);
+        // spawn dust at the player's feet, works for ground and platforms
+        const footY = this.player.y + (B - 8) / 2;
+        this.dustFx.setPosition(this.player.x, footY);
         this.dustFx.explode(8);
       }
     }
@@ -298,36 +301,45 @@ export class GameScene extends Phaser.Scene {
   // ── level obstacles ────────────────────────────────────────────────────────
 
   private buildLevel(): void {
-    this.obstacles = this.physics.add.staticGroup();
+    this.obstacles = this.physics.add.staticGroup();  // spikes
+    this.platforms = this.physics.add.staticGroup();  // landable blocks
 
     LEVEL.forEach(([wx, type, count]) => {
       for (let i = 0; i < count; i++) {
-        const ox  = wx + i * B + B / 2;
-        const oy  = GROUND_TOP - B / 2;
-        const key = type === 's' ? 'spike' : 'blockObs';
+        const ox = wx + i * B + B / 2;
+        const oy = GROUND_TOP - B / 2;
 
-        const img = this.obstacles.create(ox, oy, key) as Phaser.Physics.Arcade.Image;
-        img.setDepth(7);
-
-        const body = img.body as Phaser.Physics.Arcade.StaticBody;
         if (type === 's') {
-          // Scale spike down visually; reposition so its base still sits on ground
-          const sc  = 0.65;
-          const sw  = B * sc;                        // scaled display size ≈ 39 px
-          img.setScale(sc);
-          img.setY(GROUND_TOP - sw / 2);             // bottom of scaled sprite = GROUND_TOP
+          // ── spike ─────────────────────────────────────────────────────────
+          const img  = this.obstacles.create(ox, oy, 'spike') as Phaser.Physics.Arcade.Image;
+          img.setDepth(7);
+          const body = img.body as Phaser.Physics.Arcade.StaticBody;
 
-          // Inner rectangle of the scaled triangle, in world pixels:
-          //   unscaled inner rect = 16×40; scaled = ~10×26
-          const bw = Math.round(16 * sc);            // 10 px wide
-          const bh = Math.round(40 * sc);            // 26 px tall
+          const sc = 0.65;
+          const sw = B * sc;                          // ≈ 39 px
+          img.setScale(sc);
+          img.setY(GROUND_TOP - sw / 2);
+
+          const bw = Math.round(16 * sc);             // ~10 px
+          const bh = Math.round(40 * sc);             // ~26 px
           body.setSize(bw, bh);
-          body.setOffset((sw - bw) / 2, 2);          // centred horizontally, 2 px from tip
+          body.setOffset((sw - bw) / 2, 2);
+          img.refreshBody();
+
         } else {
-          body.setSize(B - 10, B - 10);              // 50×50 — small inset for blocks
-          body.setOffset(5, 5);
+          // ── block platform ────────────────────────────────────────────────
+          // Stacked to fill the full height from ground up.
+          // We place one block sitting on the ground; for count > 1 blocks
+          // placed side-by-side are already handled by the outer loop.
+          const img  = this.platforms.create(ox, oy, 'blockObs') as Phaser.Physics.Arcade.Image;
+          img.setDepth(7);
+          const body = img.body as Phaser.Physics.Arcade.StaticBody;
+          // Full-width body so the player lands flush on top;
+          // 2 px inset on each side to avoid phantom corner collisions.
+          body.setSize(B - 4, B - 4);
+          body.setOffset(2, 2);
+          img.refreshBody();
         }
-        img.refreshBody();
       }
     });
   }
@@ -345,10 +357,27 @@ export class GameScene extends Phaser.Scene {
     body.setMaxVelocity(800, 1400);
 
     this.physics.add.collider(this.player, this.groundStatic);
+
+    // Spikes — lethal on any touch
     this.physics.add.overlap(
       this.player,
       this.obstacles,
       () => this.onDeath(),
+      undefined,
+      this
+    );
+
+    // Blocks — act as platforms; lethal only when the player hits the side
+    this.physics.add.collider(
+      this.player,
+      this.platforms,
+      () => {
+        const body = this.player.body as Phaser.Physics.Arcade.Body;
+        if (body.blocked.right || body.blocked.left) {
+          this.onDeath();
+        }
+        // body.blocked.down → safely landed on top — no death
+      },
       undefined,
       this
     );
