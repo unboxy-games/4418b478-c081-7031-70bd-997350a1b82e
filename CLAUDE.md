@@ -12,7 +12,7 @@
 - **Enemy shooting**: Formation enemies fire bullet streams, frequency scales with level
 - **Player ship**: Left/right movement (Arrow keys or A/D), fires with Space
 - **Bullet system**: Player bullets (yellow), enemy bullets (orange-red)
-- **Lives system**: 3 lives; invincibility frames after being hit
+- **Lives system**: 4 lives; invincibility frames after being hit
 - **Score system**: Flagship = 150 pts, Escort = 80 pts, Drone = 40 pts; score popup on kill
 - **Level progression**: Clear all enemies → Wave banner → new formation (faster each wave)
 - **Game Over**: Dark overlay, final score shown, Space to restart
@@ -42,11 +42,4 @@
 | Space | Fire / Restart (game over) |
 
 ## This Turn
-- Fixed the true freeze bug: Phaser 3.80 `physics.add.overlap(group, sprite, cb)` internally
-  swaps args — `cb` receives `(sprite, groupMember)`, NOT `(groupMember, sprite)`.
-  The callbacks for `enemyBullets vs player` and `enemyGroup vs player` had `(b, _p)` /
-  `(e, _p)` which meant `b`/`e` was the **player**, not the bullet/enemy. Every hit called
-  `player.destroy()`, nulling `this.player.body` and crashing `handleInput()` every frame.
-  Fix: swapped destructuring to `(_p, b)` and `(_p, e)` so the second arg (the group member)
-  is correctly passed to the handler. Also added `if (!this.player.body) return` guard at the
-  top of `handleInput()` as a safety net.
+- Increased player starting lives from 3 to 4 (both the field initializer and the `create()` reset)
