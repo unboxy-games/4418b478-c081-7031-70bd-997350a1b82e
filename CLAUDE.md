@@ -25,14 +25,16 @@
   - Score popup text flies upward on kill
   - Wave banner scales up & fades on level transition
   - UI: score bounces on update; life icons = mini ship graphics
+- **Start screen**: Title screen with matching starfield, animated enemy rows, blinking "PRESS SPACE TO START", controls & score table; fades in/out on transition
 
 ## Key Files
 | File | Purpose |
 |------|---------|
-| `src/scenes/GameScene.ts` | All gameplay logic (formation, AI, collisions, explosions) |
-| `src/scenes/UIScene.ts`   | HUD overlay (score, wave, life icons) |
-| `src/scenes/BootScene.ts` | Passes straight to GameScene |
-| `src/config.ts`           | `GAME_WIDTH = 1280`, `GAME_HEIGHT = 720` |
+| `src/scenes/GameScene.ts`  | All gameplay logic (formation, AI, collisions, explosions) |
+| `src/scenes/UIScene.ts`    | HUD overlay (score, wave, life icons) |
+| `src/scenes/StartScene.ts` | Title / start screen (Space to begin) |
+| `src/scenes/BootScene.ts`  | Passes to StartScene |
+| `src/config.ts`            | `GAME_WIDTH = 1280`, `GAME_HEIGHT = 720` |
 
 ## Controls
 | Key | Action |
@@ -42,4 +44,4 @@
 | Space | Fire / Restart (game over) |
 
 ## This Turn
-- Increased player starting lives from 4 to 5 (field initializer, `create()` reset, and initial HUD icon count)
+- Added StartScene with starfield background, decorative animated enemy rows, gold GALAXIAN title with bob tween, blinking "PRESS SPACE TO START", controls hint, and score table; BootScene now routes to StartScene first; game fades in/out on launch
