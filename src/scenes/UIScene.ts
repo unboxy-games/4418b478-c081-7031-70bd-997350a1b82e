@@ -48,7 +48,7 @@ export class UIScene extends Phaser.Scene {
     }).setOrigin(1, 0).setDepth(10);
 
     // Initial life icons
-    this.drawLifeIcons(3);
+    this.drawLifeIcons(4);
 
     // ── Event listeners from GameScene ─────
     const gs = this.scene.get('GameScene');

@@ -12,7 +12,7 @@
 - **Enemy shooting**: Formation enemies fire bullet streams, frequency scales with level
 - **Player ship**: Left/right movement (Arrow keys or A/D), fires with Space
 - **Bullet system**: Player bullets (yellow), enemy bullets (orange-red)
-- **Lives system**: 4 lives; invincibility frames after being hit
+- **Lives system**: 5 lives; invincibility frames after being hit
 - **Score system**: Flagship = 150 pts, Escort = 80 pts, Drone = 40 pts; score popup on kill
 - **Level progression**: Clear all enemies → Wave banner → new formation (faster each wave)
 - **Game Over**: Dark overlay, final score shown, Space to restart
@@ -42,4 +42,4 @@
 | Space | Fire / Restart (game over) |
 
 ## This Turn
-- Increased player starting lives from 3 to 4 (both the field initializer and the `create()` reset)
+- Increased player starting lives from 4 to 5 (field initializer, `create()` reset, and initial HUD icon count)
