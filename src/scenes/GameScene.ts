@@ -24,7 +24,7 @@ export class GameScene extends Phaser.Scene {
   private formationOffset = 0;
   private formationDropY = 0;
 
-  private lives = 5;
+  private lives = 6;
   private score = 0;
   private level = 1;
   private isGameOver = false;
@@ -42,7 +42,7 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     // Reset all state
-    this.lives = 5;
+    this.lives = 6;
     this.score = 0;
     this.level = 1;
     this.isGameOver = false;
