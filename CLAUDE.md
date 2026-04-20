@@ -26,12 +26,14 @@
   - Wave banner scales up & fades on level transition
   - UI: score bounces on update; life icons = mini ship graphics
 - **Start screen**: Title screen with matching starfield, animated enemy rows, blinking "PRESS SPACE TO START", controls & score table; fades in/out on transition
+- **Persistent high score**: Saved via `unboxy.saves` (key `highScore`) on game over; loaded on scene start; HUD shows golden "HI  N" beneath SCORE; bounces on update; "★ NEW BEST ★" pulsing callout shown on game-over screen when record broken
 
 ## Key Files
 | File | Purpose |
 |------|---------|
-| `src/scenes/GameScene.ts`  | All gameplay logic (formation, AI, collisions, explosions) |
-| `src/scenes/UIScene.ts`    | HUD overlay (score, wave, life icons) |
+| `src/main.ts`              | Phaser config; exports `unboxyReady` (Unboxy.init promise) |
+| `src/scenes/GameScene.ts`  | All gameplay logic (formation, AI, collisions, explosions, hi-score save/load) |
+| `src/scenes/UIScene.ts`    | HUD overlay (score, hi-score, wave, life icons) |
 | `src/scenes/StartScene.ts` | Title / start screen (Space to begin) |
 | `src/scenes/BootScene.ts`  | Passes to StartScene |
 | `src/config.ts`            | `GAME_WIDTH = 1280`, `GAME_HEIGHT = 720` |
@@ -44,4 +46,8 @@
 | Space | Fire / Restart (game over) |
 
 ## This Turn
-- Increased player starting lives from 5 to 6
+- Added persistent high score via `unboxy.saves` (survives refresh and cross-device)
+- `Unboxy.init()` moved to `main.ts`, exported as `unboxyReady`
+- `GameScene` loads high score on start, tracks it live as player scores, saves on game over
+- `UIScene` shows golden "HI  N" beneath SCORE with bounce tween on update
+- Game-over screen shows "★ NEW BEST ★" pulsing banner when record is broken

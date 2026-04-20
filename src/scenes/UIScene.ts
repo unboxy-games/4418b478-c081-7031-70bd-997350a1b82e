@@ -6,9 +6,10 @@ import { GAME_WIDTH } from '../config';
  * Runs in parallel over GameScene.
  */
 export class UIScene extends Phaser.Scene {
-  private scoreText!: Phaser.GameObjects.Text;
-  private waveText!:  Phaser.GameObjects.Text;
-  private lifeIcons:  Phaser.GameObjects.Graphics[] = [];
+  private scoreText!:   Phaser.GameObjects.Text;
+  private hiScoreText!: Phaser.GameObjects.Text;
+  private waveText!:    Phaser.GameObjects.Text;
+  private lifeIcons:    Phaser.GameObjects.Graphics[] = [];
 
   private score = 0;
 
@@ -27,6 +28,15 @@ export class UIScene extends Phaser.Scene {
       fontStyle:       'bold',
       stroke:          '#000000',
       strokeThickness: 3,
+    }).setDepth(10);
+
+    // ── Hi-Score (below score, top-left) ──
+    this.hiScoreText = this.add.text(18, 40, 'HI  0', {
+      fontSize:        '15px',
+      color:           '#ffdd88',
+      fontStyle:       'bold',
+      stroke:          '#000000',
+      strokeThickness: 2,
     }).setDepth(10);
 
     // ── Wave (top-center) ──────────────────
@@ -61,6 +71,18 @@ export class UIScene extends Phaser.Scene {
         scaleX:   1.3,
         scaleY:   1.3,
         duration: 90,
+        yoyo:     true,
+        ease:     'Power2',
+      });
+    }, this);
+
+    gs.events.on('highScore', (best: number) => {
+      this.hiScoreText.setText(`HI  ${best}`);
+      this.tweens.add({
+        targets:  this.hiScoreText,
+        scaleX:   1.35,
+        scaleY:   1.35,
+        duration: 120,
         yoyo:     true,
         ease:     'Power2',
       });

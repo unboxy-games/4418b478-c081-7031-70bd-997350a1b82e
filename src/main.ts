@@ -1,9 +1,14 @@
-import { createUnboxyGame } from '@unboxy/phaser-sdk';
+import { createUnboxyGame, Unboxy } from '@unboxy/phaser-sdk';
 import { BootScene } from './scenes/BootScene';
 import { StartScene } from './scenes/StartScene';
 import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
+
+// Initialize platform services once at module load.
+// Resolves to an Unboxy instance, or null on failure — scenes must work either way.
+export const unboxyReady = Unboxy.init({ standaloneGameId: 'galaxian-clone' })
+  .catch(() => null);
 
 createUnboxyGame({
   width: GAME_WIDTH,

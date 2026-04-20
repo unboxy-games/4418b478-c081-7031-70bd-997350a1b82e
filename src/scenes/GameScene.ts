@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
+import { unboxyReady } from '../main';
 
 const COLS = 10;
 const ROWS = 5;
@@ -26,6 +27,7 @@ export class GameScene extends Phaser.Scene {
 
   private lives = 6;
   private score = 0;
+  private highScore = 0;
   private level = 1;
   private isGameOver = false;
   private playerInvincible = false;
@@ -45,6 +47,8 @@ export class GameScene extends Phaser.Scene {
     this.lives = 6;
     this.score = 0;
     this.level = 1;
+    // highScore intentionally NOT reset here — kept across restarts in-session
+    // and loaded from saves below
     this.isGameOver = false;
     this.playerInvincible = false;
     this.formationOffset = 0;
@@ -95,6 +99,32 @@ export class GameScene extends Phaser.Scene {
     // Launch HUD (stop first in case it's already running)
     this.scene.stop('UIScene');
     this.scene.launch('UIScene');
+
+    // Load persisted high score — non-blocking, UI will update when ready
+    this.loadHighScore();
+  }
+
+  // ─────────────────────────────────────────
+  //  High-score persistence
+  // ─────────────────────────────────────────
+  private async loadHighScore(): Promise<void> {
+    const unboxy = await unboxyReady;
+    if (!unboxy) return;
+    const saved = await unboxy.saves.get<number>('highScore').catch(() => null);
+    if (typeof saved === 'number' && saved > this.highScore) {
+      this.highScore = saved;
+      this.events.emit('highScore', this.highScore);
+    }
+  }
+
+  private async saveHighScore(): Promise<void> {
+    const unboxy = await unboxyReady;
+    if (!unboxy) return;
+    try {
+      await unboxy.saves.set('highScore', this.highScore);
+    } catch (err) {
+      console.warn('[galaxian] failed to save highScore', err);
+    }
   }
 
   // ─────────────────────────────────────────
@@ -512,6 +542,12 @@ export class GameScene extends Phaser.Scene {
     this.score += pts;
     this.events.emit('score', pts);
 
+    // Update high score live as the player earns points
+    if (this.score > this.highScore) {
+      this.highScore = this.score;
+      this.events.emit('highScore', this.highScore);
+    }
+
     const alive = (this.enemyGroup.getChildren() as Phaser.Physics.Arcade.Sprite[])
       .filter(e => e.active);
     if (alive.length === 0) this.advanceLevel();
@@ -678,11 +714,17 @@ export class GameScene extends Phaser.Scene {
   private showGameOver(): void {
     this.isGameOver = true;
 
+    // Determine if this run set a new high score BEFORE we potentially overwrite
+    const isNewBest = this.score > 0 && this.score >= this.highScore;
+
+    // Persist the high score (fire-and-forget — never blocks UI)
+    this.saveHighScore();
+
     const overlay = this.add.graphics().setDepth(19);
     overlay.fillStyle(0x000000, 0.65);
     overlay.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-    const goTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 70, 'GAME OVER', {
+    const goTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 80, 'GAME OVER', {
       fontSize:        '64px',
       color:           '#ff3333',
       fontStyle:       'bold',
@@ -700,7 +742,7 @@ export class GameScene extends Phaser.Scene {
       ease:     'Sine.easeInOut',
     });
 
-    this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 10, `SCORE   ${this.score}`, {
+    this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 10, `SCORE   ${this.score}`, {
       fontSize:        '32px',
       color:           '#ffffff',
       fontStyle:       'bold',
@@ -708,13 +750,36 @@ export class GameScene extends Phaser.Scene {
       strokeThickness: 4,
     }).setOrigin(0.5).setDepth(20);
 
-    this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 55, `WAVE  ${this.level}`, {
+    // High score row
+    const hiColor = isNewBest ? '#ffdd00' : '#aaaaaa';
+    const hiLabel = isNewBest ? '★  NEW  BEST  ★' : `HI-SCORE   ${this.highScore}`;
+    const hiTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 32, hiLabel, {
+      fontSize:        isNewBest ? '26px' : '22px',
+      color:           hiColor,
+      fontStyle:       'bold',
+      stroke:          '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(20);
+
+    if (isNewBest) {
+      this.tweens.add({
+        targets:  hiTxt,
+        scaleX:   1.18,
+        scaleY:   1.18,
+        duration: 420,
+        yoyo:     true,
+        repeat:   -1,
+        ease:     'Sine.easeInOut',
+      });
+    }
+
+    this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 68, `WAVE  ${this.level}`, {
       fontSize: '22px',
       color:    '#aaaaff',
     }).setOrigin(0.5).setDepth(20);
 
     const restartTxt = this.add.text(
-      GAME_WIDTH / 2, GAME_HEIGHT / 2 + 100,
+      GAME_WIDTH / 2, GAME_HEIGHT / 2 + 110,
       'Press  SPACE  to  play  again',
       { fontSize: '22px', color: '#99aaff' }
     ).setOrigin(0.5).setDepth(20);
