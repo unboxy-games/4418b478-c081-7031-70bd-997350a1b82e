@@ -25,7 +25,7 @@ export class GameScene extends Phaser.Scene {
   private formationOffset = 0;
   private formationDropY = 0;
 
-  private lives = 6;
+  private lives = 5;
   private score = 0;
   private highScore = 0;
   private level = 1;
@@ -44,7 +44,7 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     // Reset all state
-    this.lives = 6;
+    this.lives = 5;
     this.score = 0;
     this.level = 1;
     // highScore intentionally NOT reset here — kept across restarts in-session
