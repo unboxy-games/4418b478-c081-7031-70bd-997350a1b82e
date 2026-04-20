@@ -22,39 +22,55 @@ export class UIScene extends Phaser.Scene {
     this.lifeIcons = [];
 
     // ── Score (top-left) ───────────────────
-    this.scoreText = this.add.text(18, 14, 'SCORE  0', {
-      fontSize:        '20px',
-      color:           '#ffffff',
-      fontStyle:       'bold',
-      stroke:          '#000000',
-      strokeThickness: 3,
-    }).setDepth(10);
-
-    // ── Hi-Score (below score, top-left) ──
-    this.hiScoreText = this.add.text(18, 40, 'HI  0', {
-      fontSize:        '15px',
-      color:           '#ffdd88',
+    this.add.text(18, 10, 'SCORE', {
+      fontSize:        '13px',
+      color:           '#aaaaaa',
       fontStyle:       'bold',
       stroke:          '#000000',
       strokeThickness: 2,
     }).setDepth(10);
 
-    // ── Wave (top-center) ──────────────────
-    this.waveText = this.add.text(GAME_WIDTH / 2, 14, 'WAVE  1', {
-      fontSize:        '20px',
-      color:           '#aaddff',
+    this.scoreText = this.add.text(18, 26, '0', {
+      fontSize:        '24px',
+      color:           '#ffffff',
+      fontStyle:       'bold',
+      stroke:          '#000000',
+      strokeThickness: 3,
+    }).setDepth(10);
+
+    // ── Hi-Score (top-center, prominent) ──
+    this.add.text(GAME_WIDTH / 2, 10, 'HI-SCORE', {
+      fontSize:        '13px',
+      color:           '#ffcc55',
+      fontStyle:       'bold',
+      stroke:          '#000000',
+      strokeThickness: 2,
+    }).setOrigin(0.5, 0).setDepth(10);
+
+    this.hiScoreText = this.add.text(GAME_WIDTH / 2, 26, '0', {
+      fontSize:        '24px',
+      color:           '#ffdd88',
       fontStyle:       'bold',
       stroke:          '#000000',
       strokeThickness: 3,
     }).setOrigin(0.5, 0).setDepth(10);
 
-    // ── Lives label (top-right) ────────────
-    this.add.text(GAME_WIDTH - 18, 14, 'LIVES', {
-      fontSize:        '20px',
-      color:           '#ffffff',
+    // ── Wave (below hi-score, center) ──────
+    this.waveText = this.add.text(GAME_WIDTH / 2, 56, 'WAVE  1', {
+      fontSize:        '15px',
+      color:           '#88ccff',
       fontStyle:       'bold',
       stroke:          '#000000',
-      strokeThickness: 3,
+      strokeThickness: 2,
+    }).setOrigin(0.5, 0).setDepth(10);
+
+    // ── Lives label (top-right) ────────────
+    this.add.text(GAME_WIDTH - 18, 10, 'LIVES', {
+      fontSize:        '13px',
+      color:           '#aaaaaa',
+      fontStyle:       'bold',
+      stroke:          '#000000',
+      strokeThickness: 2,
     }).setOrigin(1, 0).setDepth(10);
 
     // Initial life icons
@@ -65,7 +81,7 @@ export class UIScene extends Phaser.Scene {
 
     gs.events.on('score', (pts: number) => {
       this.score += pts;
-      this.scoreText.setText(`SCORE  ${this.score}`);
+      this.scoreText.setText(`${this.score}`);
       this.tweens.add({
         targets:  this.scoreText,
         scaleX:   1.3,
@@ -77,7 +93,7 @@ export class UIScene extends Phaser.Scene {
     }, this);
 
     gs.events.on('highScore', (best: number) => {
-      this.hiScoreText.setText(`HI  ${best}`);
+      this.hiScoreText.setText(`${best}`);
       this.tweens.add({
         targets:  this.hiScoreText,
         scaleX:   1.35,
@@ -112,7 +128,7 @@ export class UIScene extends Phaser.Scene {
 
     for (let i = 0; i < Math.max(0, lives); i++) {
       const x = GAME_WIDTH - 22 - i * 30;
-      const y = 46;
+      const y = 38;
       const g = this.add.graphics().setDepth(10);
 
       g.fillStyle(0x1a44cc);
