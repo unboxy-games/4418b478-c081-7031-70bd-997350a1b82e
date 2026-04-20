@@ -105,6 +105,36 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────
+  //  Leaderboard submission
+  // ─────────────────────────────────────────
+  private async submitLeaderboardScore(): Promise<void> {
+    if (this.score <= 0) return;
+    const unboxy = await unboxyReady;
+    if (!unboxy || !unboxy.isAuthenticated) return;
+
+    const name  = unboxy.user?.name ?? 'PILOT';
+    const entry = { name, score: this.score, wave: this.level, at: Date.now() };
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const raw  = await unboxy.gameData.get<Array<{ name: string; score: number; wave: number; at: number }>>('leaderboard');
+        const list = Array.isArray(raw) ? raw : [];
+        const next = [...list, entry]
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 100);
+        await unboxy.gameData.set('leaderboard', next);
+        return;
+      } catch (err: any) {
+        if (err?.code !== 'VERSION_MISMATCH') {
+          console.warn('[galaxian] leaderboard submit failed', err);
+          return;
+        }
+        // Another player landed first — re-read and retry
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────
   //  High-score persistence
   // ─────────────────────────────────────────
   private async loadHighScore(): Promise<void> {
@@ -717,8 +747,9 @@ export class GameScene extends Phaser.Scene {
     // Determine if this run set a new high score BEFORE we potentially overwrite
     const isNewBest = this.score > 0 && this.score >= this.highScore;
 
-    // Persist the high score (fire-and-forget — never blocks UI)
+    // Persist personal high score and submit to global leaderboard (fire-and-forget)
     this.saveHighScore();
+    this.submitLeaderboardScore();
 
     const overlay = this.add.graphics().setDepth(19);
     overlay.fillStyle(0x000000, 0.65);
@@ -779,7 +810,7 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(20);
 
     const restartTxt = this.add.text(
-      GAME_WIDTH / 2, GAME_HEIGHT / 2 + 110,
+      GAME_WIDTH / 2, GAME_HEIGHT / 2 + 108,
       'Press  SPACE  to  play  again',
       { fontSize: '22px', color: '#99aaff' }
     ).setOrigin(0.5).setDepth(20);
@@ -792,9 +823,27 @@ export class GameScene extends Phaser.Scene {
       repeat:   -1,
     });
 
+    const lbTxt = this.add.text(
+      GAME_WIDTH / 2, GAME_HEIGHT / 2 + 146,
+      'Press  L  for  Scoreboard',
+      { fontSize: '20px', color: '#4477cc' }
+    ).setOrigin(0.5).setDepth(20);
+
+    this.tweens.add({
+      targets:  lbTxt,
+      alpha:    0.25,
+      duration: 900,
+      yoyo:     true,
+      repeat:   -1,
+    });
+
     this.time.delayedCall(1200, () => {
       this.input.keyboard!.once('keydown-SPACE', () => {
         this.scene.restart();
+      });
+      this.input.keyboard!.once('keydown-L', () => {
+        this.scene.stop('UIScene');
+        this.scene.start('LeaderboardScene', { score: this.score, wave: this.level });
       });
     });
   }

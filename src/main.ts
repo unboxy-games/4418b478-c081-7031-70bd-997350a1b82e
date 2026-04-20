@@ -3,6 +3,7 @@ import { BootScene } from './scenes/BootScene';
 import { StartScene } from './scenes/StartScene';
 import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
+import { LeaderboardScene } from './scenes/LeaderboardScene';
 import { GAME_WIDTH, GAME_HEIGHT } from './config';
 
 // Initialize platform services once at module load.
@@ -13,5 +14,5 @@ export const unboxyReady = Unboxy.init({ standaloneGameId: 'galaxian-clone' })
 createUnboxyGame({
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
-  scenes: [BootScene, StartScene, GameScene, UIScene],
+  scenes: [BootScene, StartScene, GameScene, UIScene, LeaderboardScene],
 });

@@ -15,7 +15,7 @@
 - **Lives system**: 5 lives; invincibility frames after being hit
 - **Score system**: Flagship = 150 pts, Escort = 80 pts, Drone = 40 pts; score popup on kill
 - **Level progression**: Clear all enemies → Wave banner → new formation (faster each wave)
-- **Game Over**: Dark overlay, final score shown, Space to restart
+- **Game Over**: Dark overlay, final score shown, Space to restart, L for scoreboard
 - **Visual polish**:
   - Deep space gradient background + nebula blobs + 200 static stars
   - All ships drawn with Phaser Graphics API (detailed silhouettes, eyes, cockpits, engines)
@@ -27,23 +27,37 @@
   - UI: score bounces on update; life icons = mini ship graphics
 - **Start screen**: Title screen with matching starfield, animated enemy rows, blinking "PRESS SPACE TO START", controls & score table; fades in/out on transition
 - **Persistent high score**: Saved via `unboxy.saves` (key `highScore`) on game over; loaded on scene start; HUD shows golden "HI  N" beneath SCORE; bounces on update; "★ NEW BEST ★" pulsing callout shown on game-over screen when record broken
+- **Global scoreboard**: Top-10 all-player leaderboard via `unboxy.gameData` (key `leaderboard`); displayed in `LeaderboardScene`; scores submitted on game over for authenticated players; accessible via L key on game-over screen; SPACE restarts / ESC returns to menu
 
 ## Key Files
 | File | Purpose |
 |------|---------|
-| `src/main.ts`              | Phaser config; exports `unboxyReady` (Unboxy.init promise) |
-| `src/scenes/GameScene.ts`  | All gameplay logic (formation, AI, collisions, explosions, hi-score save/load) |
-| `src/scenes/UIScene.ts`    | HUD overlay (score, hi-score, wave, life icons) |
-| `src/scenes/StartScene.ts` | Title / start screen (Space to begin) |
-| `src/scenes/BootScene.ts`  | Passes to StartScene |
-| `src/config.ts`            | `GAME_WIDTH = 1280`, `GAME_HEIGHT = 720` |
+| `src/main.ts`                    | Phaser config; exports `unboxyReady` (Unboxy.init promise) |
+| `src/scenes/GameScene.ts`        | All gameplay logic; submits score to leaderboard on game over |
+| `src/scenes/UIScene.ts`          | HUD overlay (score, hi-score, wave, life icons) |
+| `src/scenes/StartScene.ts`       | Title / start screen (Space to begin) |
+| `src/scenes/LeaderboardScene.ts` | Top-10 global scoreboard; reads `gameData.leaderboard` |
+| `src/scenes/BootScene.ts`        | Passes to StartScene |
+| `src/config.ts`                  | `GAME_WIDTH = 1280`, `GAME_HEIGHT = 720` |
+
+## Leaderboard details
+- Stored in `unboxy.gameData` under key `leaderboard` (array of up to 100 entries)
+- Each entry: `{ name: string; score: number; wave: number; at: number }`
+- Submission uses a read-modify-write retry loop (up to 3 attempts) to handle `VERSION_MISMATCH` from concurrent writers
+- Anonymous players can view the leaderboard but scores are only submitted for authenticated users
+- Current player's entry is highlighted in the scoreboard (matched by score + wave)
 
 ## Controls
 | Key | Action |
 |-----|--------|
 | ← / A | Move player left |
 | → / D | Move player right |
-| Space | Fire / Restart (game over) |
+| Space | Fire / Restart (game over) / Play again (scoreboard) |
+| L | Open Scoreboard (game over screen) |
+| ESC | Return to Main Menu (scoreboard) |
 
 ## This Turn
-- Reduced player starting lives from 6 to 5
+- Added `LeaderboardScene` — themed top-10 global scoreboard with panel, medal highlights, and current-player row highlight
+- Added `submitLeaderboardScore()` to `GameScene` — submits score+wave+name to `gameData` on game over (authenticated users only, retry on VERSION_MISMATCH)
+- Added "Press L for Scoreboard" prompt on game-over screen
+- Registered `LeaderboardScene` in Phaser config (`main.ts`)
