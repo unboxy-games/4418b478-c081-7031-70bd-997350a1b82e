@@ -97,6 +97,17 @@ export class GameScene extends Phaser.Scene {
   private sellBtnContainer: Phaser.GameObjects.Container | null = null;
   private _blockNextTileTap = false;
 
+  // ── Multiplayer state ────────────────────────────────────────────────────
+  private mpMode = false;
+  private mpIsHost = false;
+  private mpRoom: any = null;
+  private mpSyncTimer = 0;
+  private mpCleanupFns: Array<() => void> = [];
+  /** Ghost enemies rendered on the guest side (keyed by enemy id). */
+  private guestEnemies: Map<number, Enemy> = new Map();
+  private myName = 'You';
+  private partnerName = 'Partner';
+
   constructor() {
     super({ key: 'GameScene' });
   }
@@ -115,6 +126,14 @@ export class GameScene extends Phaser.Scene {
     this.countdownActive = false;
     this.shopBtns = [];
 
+    // Reset multiplayer state from any previous run
+    this.mpMode = false;
+    this.mpIsHost = false;
+    this.mpRoom = null;
+    this.mpSyncTimer = 0;
+    this.mpCleanupFns = [];
+    this.guestEnemies = new Map();
+
     this.initGrid();
     this.drawBackground();
     this.drawShopPanel();
@@ -122,17 +141,30 @@ export class GameScene extends Phaser.Scene {
     this.setupInput();
     this.createStartButton();
 
-    // Listen for enemy kills
+    // Listen for enemy kills — only award gold on host/solo
     this.events.on('enemy-killed', (enemy: Enemy) => {
-      this.gold += enemy.gold;
-      this.score += enemy.gold * 10;
+      if (!this.mpMode || this.mpIsHost) {
+        this.gold += enemy.gold;
+        this.score += enemy.gold * 10;
+        this.emitStats();
+      }
       this.spawnDeathParticles(enemy.x, enemy.y, enemy.type);
-      this.emitStats();
       this.showFloatingText(`+${enemy.gold}g`, enemy.x, enemy.y - 10, '#ffd700');
     });
 
     this.scene.launch('UIScene');
     this.emitStats();
+
+    // Check for multiplayer data passed from LobbyScene
+    const sceneData = this.scene.settings.data as any;
+    if (sceneData?.multiplayer === true && sceneData?.room) {
+      this.mpMode = true;
+      this.mpRoom = sceneData.room;
+      this.mpIsHost = sceneData.isHost ?? true;
+      this.myName = sceneData.myName ?? 'You';
+      this.partnerName = sceneData.partnerName ?? 'Partner';
+      this.setupMultiplayer();
+    }
   }
 
   private initGrid(): void {
@@ -390,6 +422,26 @@ export class GameScene extends Phaser.Scene {
     if (PATH_SET.has(`${col},${row}`)) return;
     if (this.grid[row][col] !== null) return;
 
+    // Guest: validate gold locally for instant feedback, then send request to host
+    if (this.mpMode && !this.mpIsHost) {
+      const guestCfg = TOWER_CONFIGS[this.selectedType];
+      if (this.gold < guestCfg.cost) {
+        this.events.emit('not-enough-gold');
+        const camShake = this.add.graphics().setDepth(50);
+        camShake.fillStyle(0xffaa00, 0.15);
+        camShake.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+        this.tweens.add({
+          targets: camShake,
+          alpha: 0,
+          duration: 220,
+          onComplete: () => camShake.destroy(),
+        });
+        return;
+      }
+      try { this.mpRoom.send('place-tower', { col, row, type: this.selectedType }); } catch {}
+      return;
+    }
+
     const cfg = TOWER_CONFIGS[this.selectedType];
     if (this.gold < cfg.cost) {
       this.events.emit('not-enough-gold');
@@ -501,6 +553,14 @@ export class GameScene extends Phaser.Scene {
     if (!this.selectedTower || this.gameOver) return;
     // Block the global pointerdown handler from also running on this same tap
     this._blockNextTileTap = true;
+
+    // Guest: send sell request to host, then just deselect
+    if (this.mpMode && !this.mpIsHost) {
+      try { this.mpRoom.send('sell-tower', { col: this.selectedTower.col, row: this.selectedTower.row }); } catch {}
+      this.deselectTower();
+      return;
+    }
+
     const tower = this.selectedTower;
     const refund = Math.floor(TOWER_CONFIGS[tower.type].cost * 0.6);
 
@@ -578,7 +638,14 @@ export class GameScene extends Phaser.Scene {
 
     this.startBtn.on('pointerover', () => drawBtn(true));
     this.startBtn.on('pointerout', () => drawBtn(false));
-    this.startBtn.on('pointerdown', () => this.startWave());
+    this.startBtn.on('pointerdown', () => {
+      if (this.mpMode && !this.mpIsHost) {
+        // Guest requests the host to start the wave
+        try { this.mpRoom.send('start-wave', {}); } catch {}
+      } else {
+        this.startWave();
+      }
+    });
 
     this.tweens.add({
       targets: this.startBtn,
@@ -606,6 +673,12 @@ export class GameScene extends Phaser.Scene {
     this.startBtn.setVisible(false);
     this.tweens.killTweensOf(this.startBtn);
     this.emitStats();
+
+    // Notify guest
+    if (this.mpMode && this.mpIsHost) {
+      try { this.mpRoom.send('wave-started', { waveNum: this.waveNum }); } catch {}
+      this.syncHostState();
+    }
 
     // Wave banner
     const banner = this.add
@@ -643,6 +716,12 @@ export class GameScene extends Phaser.Scene {
     const bonus = 25 + this.waveNum * 10;
     this.gold += bonus;
     this.emitStats();
+
+    // Notify guest
+    if (this.mpMode && this.mpIsHost) {
+      try { this.mpRoom.send('wave-complete', { bonus, waveNum: this.waveNum }); } catch {}
+      this.syncHostState();
+    }
 
     // Start countdown for next wave
     this.countdown = this.COUNTDOWN_MS;
@@ -707,10 +786,16 @@ export class GameScene extends Phaser.Scene {
   }
 
   private triggerGameOver(): void {
+    if (this.gameOver) return;
     this.gameOver = true;
     this.waveActive = false;
     this.deselectTower();
     this.startBtn.setVisible(false);
+
+    // Notify guest
+    if (this.mpMode && this.mpIsHost) {
+      try { this.mpRoom.send('game-over', {}); } catch {}
+    }
 
     const overlay = this.add.graphics().setDepth(30);
     overlay.fillStyle(0x000000, 0.72);
@@ -750,7 +835,15 @@ export class GameScene extends Phaser.Scene {
     restartBtn.on('pointerout', () => restartBtn.setStyle({ color: '#ffd700' }));
     restartBtn.on('pointerdown', () => {
       this.scene.stop('UIScene');
-      this.scene.restart();
+      if (this.mpMode) {
+        // Clean up room and return to lobby
+        this.mpCleanupFns.forEach(fn => { try { fn(); } catch {} });
+        this.mpCleanupFns = [];
+        try { this.mpRoom?.leave(); } catch {}
+        this.scene.start('LobbyScene');
+      } else {
+        this.scene.restart();
+      }
     });
 
     this.tweens.add({
@@ -819,6 +912,19 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    // Guest: game simulation runs on host only — skip all logic here
+    if (this.mpMode && !this.mpIsHost) return;
+
+    // Host: periodically sync state and enemy positions to guest
+    if (this.mpMode && this.mpIsHost) {
+      this.mpSyncTimer -= delta;
+      if (this.mpSyncTimer <= 0) {
+        this.mpSyncTimer = 150; // ~6 Hz
+        this.syncHostState();
+        this.syncEnemies();
+      }
+    }
+
     // --- Countdown between waves ---
     if (this.countdownActive && !this.waveActive && !this.gameOver) {
       this.countdown -= delta;

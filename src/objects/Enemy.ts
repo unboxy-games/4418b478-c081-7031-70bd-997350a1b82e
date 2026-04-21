@@ -15,6 +15,8 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
 };
 
 export class Enemy {
+  static _nextId = 0;
+
   scene: Phaser.Scene;
   type: EnemyType;
   container: Phaser.GameObjects.Container;
@@ -22,6 +24,7 @@ export class Enemy {
   private bodyG: Phaser.GameObjects.Graphics;
   private hpG: Phaser.GameObjects.Graphics;
 
+  id: number;
   maxHp: number;
   hp: number;
   speed: number;
@@ -41,6 +44,7 @@ export class Enemy {
     this.scene = scene;
     this.type = type;
     this.waypoints = waypoints;
+    this.id = ++Enemy._nextId;
 
     const cfg = ENEMY_CONFIGS[type];
     this.maxHp = Math.round(cfg.hp * hpScale);
@@ -366,4 +370,42 @@ export class Enemy {
 
   get x(): number { return this.container.x; }
   get y(): number { return this.container.y; }
+
+  // ─── Multiplayer guest helpers ─────────────────────────────────────────────
+
+  /** Snap position (used by guest to mirror host's enemy positions). */
+  syncPosition(x: number, y: number): void {
+    this.container.x = x;
+    this.container.y = y;
+  }
+
+  /** Update HP values and redraw HP bar (used by guest). */
+  syncHp(hp: number, maxHp: number): void {
+    this.hp = hp;
+    this.maxHp = maxHp;
+    this.drawHp();
+  }
+
+  /**
+   * Trigger the death scale-and-fade animation without emitting 'enemy-killed'.
+   * Used on the guest to visually destroy a ghost enemy when the host reports it dead.
+   */
+  triggerDeathAnimation(): void {
+    if (!this.alive) return;
+    this.alive = false;
+    this.scene.tweens.killTweensOf(this.body);
+    this.scene.tweens.add({
+      targets: this.container,
+      scaleX: 1.8,
+      scaleY: 1.8,
+      alpha: 0,
+      duration: 260,
+      ease: 'Power2',
+      onComplete: () => {
+        if (this.container && this.container.scene) {
+          this.container.destroy();
+        }
+      },
+    });
+  }
 }
