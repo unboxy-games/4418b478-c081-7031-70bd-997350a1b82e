@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
+import { activeRoom, clearActiveRoom } from '../gameState';
+import { unboxyReady } from '../main';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const SPEED      = 450;               // auto-scroll px/s
@@ -61,6 +63,17 @@ export class GameScene extends Phaser.Scene {
   private pauseBtnY          = 0;
   private pauseIconGfx!:     Phaser.GameObjects.Graphics;
 
+  // ── Multiplayer state ──────────────────────────────────────────────────────
+  private isMultiplayer      = false;
+  private remotePlayer?:     Phaser.GameObjects.Image;
+  private remoteTarget       = { x: 200, y: 0, angle: 0, alive: true };
+  private remoteAlive        = true;
+  private localNameTxt?:     Phaser.GameObjects.Text;
+  private remoteNameTxt?:    Phaser.GameObjects.Text;
+  private mpTimer?:          Phaser.Time.TimerEvent;
+  private mpOffState?:       () => void;
+  private mpOffLeave?:       () => void;
+
   constructor() { super({ key: 'GameScene' }); }
 
   // ── lifecycle ──────────────────────────────────────────────────────────────
@@ -73,6 +86,10 @@ export class GameScene extends Phaser.Scene {
     this.waitingForRestart  = false;
     this.isPaused           = false;
     this.pauseContents      = [];
+    this.remotePlayer       = undefined;
+    this.localNameTxt       = undefined;
+    this.remoteNameTxt      = undefined;
+    this.remoteAlive        = true;
     this.attempt     = (this.game.registry.get('attempt') as number) ?? 1;
 
     this.physics.world.setBounds(0, 0, WORLD_W, GAME_HEIGHT);
@@ -91,6 +108,10 @@ export class GameScene extends Phaser.Scene {
     if (!this.scene.isActive('UIScene')) {
       this.scene.launch('UIScene');
     }
+
+    // Multiplayer — wire up if the lobby handed us a room
+    this.isMultiplayer = this.game.registry.get('multiplayer') === true;
+    if (this.isMultiplayer) this.initMultiplayer();
   }
 
   update(_t: number, dt: number): void {
@@ -138,6 +159,21 @@ export class GameScene extends Phaser.Scene {
 
     // ── fall-off check: treat dropping below the screen as a death ──
     if (this.player.y > GAME_HEIGHT + 100) this.onDeath();
+
+    // ── multiplayer: lerp remote player + float name labels ──
+    if (this.isMultiplayer) {
+      if (this.remotePlayer && this.remoteAlive) {
+        this.remotePlayer.x = Phaser.Math.Linear(this.remotePlayer.x, this.remoteTarget.x, 0.2);
+        this.remotePlayer.y = Phaser.Math.Linear(this.remotePlayer.y, this.remoteTarget.y, 0.2);
+        this.remotePlayer.setAngle(this.remoteTarget.angle);
+      }
+      if (this.localNameTxt) {
+        this.localNameTxt.setPosition(this.player.x, this.player.y - B / 2 - 6);
+      }
+      if (this.remoteNameTxt && this.remotePlayer) {
+        this.remoteNameTxt.setPosition(this.remotePlayer.x, this.remotePlayer.y - B / 2 - 6);
+      }
+    }
   }
 
   // ── texture generation ────────────────────────────────────────────────────
@@ -234,10 +270,29 @@ export class GameScene extends Phaser.Scene {
       g.strokeRoundedRect(50, 50, 150, 150, 10);
     });
 
+    // ── remote-player (player 2) cube — warm orange palette ──
+    mk('cube2', B, B, g => {
+      g.fillStyle(0xbb5500, 0.25);
+      g.fillRoundedRect(-5, -5, B + 10, B + 10, 12);      // outer glow
+      g.fillStyle(0xff8800);
+      g.fillRoundedRect(0, 0, B, B, 9);                    // main body
+      g.fillStyle(0xffcc66, 0.5);
+      g.fillRoundedRect(4, 4, B - 8, 18, 5);               // top sheen
+      g.fillStyle(0x662200);
+      g.fillRoundedRect(13, 13, B - 26, B - 26, 3);        // inner dark square
+      const cx = B / 2, cy = B / 2, r = 10;
+      g.fillStyle(0xffdd44);
+      g.fillTriangle(cx, cy - r, cx + r, cy, cx, cy + r);  // diamond right
+      g.fillTriangle(cx, cy - r, cx - r, cy, cx, cy + r);  // diamond left
+      g.lineStyle(2, 0xffcc00);
+      g.strokeRoundedRect(0, 0, B, B, 9);                  // border
+    });
+
     // ── particle textures ──
     mk('pixel',   2, 2, g => { g.fillStyle(0xffffff); g.fillRect(0, 0, 2, 2); });
     mk('pSquare', 8, 8, g => { g.fillStyle(0x44aaff); g.fillRect(0, 0, 8, 8); });
     mk('pDot',    6, 6, g => { g.fillStyle(0xaaccff); g.fillCircle(3, 3, 3); });
+    mk('pOrange', 8, 8, g => { g.fillStyle(0xff8800); g.fillRect(0, 0, 8, 8); });
   }
 
   // ── background ────────────────────────────────────────────────────────────
@@ -381,6 +436,147 @@ export class GameScene extends Phaser.Scene {
       undefined,
       this
     );
+  }
+
+  // ── multiplayer ────────────────────────────────────────────────────────────
+
+  private initMultiplayer(): void {
+    const room = activeRoom;
+    if (!room) { this.isMultiplayer = false; return; }
+
+    // Initialise remote target at player start position
+    this.remoteTarget = { x: 200, y: GROUND_TOP - B / 2 - 2, angle: 0, alive: true };
+    this.remoteAlive  = true;
+
+    // Orange ghost cube for the remote player — world space, no physics
+    this.remotePlayer = this.add
+      .image(200, GROUND_TOP - B / 2 - 2, 'cube2')
+      .setDepth(8).setAlpha(0.88);
+
+    // Idle bob tween so it never looks frozen while waiting for first packet
+    this.tweens.add({
+      targets: this.remotePlayer, y: GROUND_TOP - B / 2 - 2 - 6,
+      yoyo: true, repeat: -1, duration: 550, ease: 'Sine.easeInOut',
+    });
+
+    // Floating name labels (world space — follow cubes in update())
+    this.localNameTxt = this.add.text(200, GROUND_TOP - B - 14, 'You', {
+      fontSize: '13px', color: '#88ccff', fontFamily: 'Arial',
+      stroke: '#000033', strokeThickness: 3,
+    }).setDepth(11).setOrigin(0.5, 1);
+
+    this.remoteNameTxt = this.add.text(200, GROUND_TOP - B - 14, 'Opponent', {
+      fontSize: '13px', color: '#ffcc44', fontFamily: 'Arial',
+      stroke: '#000033', strokeThickness: 3,
+    }).setDepth(11).setOrigin(0.5, 1);
+
+    // Resolve player's own display name from Unboxy
+    unboxyReady.then(unboxy => {
+      const myName = unboxy?.user?.name ?? 'You';
+      if (this.localNameTxt) this.localNameTxt.setText(myName);
+    });
+
+    // Subscribe to room state changes — read remote player position
+    this.mpOffState = room.onStateChange(() => {
+      const state = room.state as { players: Map<string, { displayName?: string }> };
+      state.players.forEach((p: { displayName?: string }, sid: string) => {
+        if (sid === room.sessionId) return; // skip self
+
+        const pos = room.player.get<{
+          x: number; y: number; angle: number; alive: boolean; won: boolean;
+        }>(sid, 'pos');
+
+        if (!pos) return;
+
+        this.remoteTarget = { x: pos.x, y: pos.y, angle: pos.angle, alive: pos.alive };
+
+        // Update opponent display name if available
+        if (this.remoteNameTxt && p?.displayName) {
+          this.remoteNameTxt.setText(p.displayName);
+        }
+
+        // Remote player died
+        if (!pos.alive && this.remoteAlive) {
+          this.remoteAlive = false;
+          this.triggerRemoteDeath();
+        }
+      });
+    });
+
+    // Handle opponent disconnect
+    this.mpOffLeave = room.onLeave((code: number) => {
+      if (code !== 1000 && this.alive) {
+        this.remoteAlive = false;
+        if (this.remotePlayer) this.remotePlayer.setVisible(false);
+        this.showFloatingNotif('Opponent disconnected 👋', '#aabbdd');
+      }
+    });
+
+    // Publish local position at ~20 Hz
+    this.mpTimer = this.time.addEvent({
+      delay: 50,
+      loop: true,
+      callback: () => {
+        try {
+          room.player.set('pos', {
+            x:     Math.round(this.player.x),
+            y:     Math.round(this.player.y),
+            angle: Math.round(this.player.angle),
+            alive: this.alive,
+            won:   false,
+          });
+        } catch (_) { /* network hiccup — ignore */ }
+      },
+    });
+
+    // Cleanup subscriptions on scene shutdown so we don't leak handlers
+    this.events.once('shutdown', () => {
+      this.mpOffState?.();
+      this.mpOffLeave?.();
+      this.mpTimer?.remove();
+    });
+  }
+
+  /** Explode the remote cube with orange particles and notify the local player */
+  private triggerRemoteDeath(): void {
+    if (!this.remotePlayer) return;
+
+    // Orange particle burst at remote cube's last position
+    const fx = this.add.particles(this.remotePlayer.x, this.remotePlayer.y, 'pOrange', {
+      speed:    { min: 80, max: 400 },
+      angle:    { min: 0, max: 360 },
+      scale:    { start: 1.1, end: 0 },
+      alpha:    { start: 1, end: 0 },
+      lifespan: 600,
+      gravityY: 500,
+      tint:     [0xff8800, 0xffcc44, 0xff4400, 0xffee88],
+      quantity: 18,
+      emitting: false,
+    }).setDepth(12);
+    fx.explode(18);
+    this.time.delayedCall(700, () => fx.destroy());
+
+    this.remotePlayer.setVisible(false);
+    if (this.remoteNameTxt) {
+      this.remoteNameTxt.setText('✗ Opponent');
+      this.remoteNameTxt.setStyle({ color: '#ff6644' });
+    }
+
+    this.showFloatingNotif('Opponent died! 💥 Keep going!', '#ffcc44');
+  }
+
+  /** Show a brief floating notification fixed to the HUD (camera-space) */
+  private showFloatingNotif(text: string, color: string): void {
+    const notif = this.add.text(GAME_WIDTH / 2, 70, text, {
+      fontSize: '20px', color, fontFamily: 'Arial',
+      stroke: '#000022', strokeThickness: 3,
+    }).setScrollFactor(0).setDepth(25).setOrigin(0.5).setAlpha(0);
+
+    this.tweens.add({ targets: notif, alpha: 1, y: 62, duration: 260 });
+    this.tweens.add({
+      targets: notif, alpha: 0, y: 50,
+      delay: 2400, duration: 500, onComplete: () => notif.destroy(),
+    });
   }
 
   // ── particles ─────────────────────────────────────────────────────────────
@@ -612,6 +808,16 @@ export class GameScene extends Phaser.Scene {
     if (!this.alive) return;
     this.alive = false;
 
+    // Publish death to remote immediately
+    if (this.isMultiplayer) {
+      try {
+        activeRoom?.player.set('pos', {
+          x: Math.round(this.player.x), y: Math.round(this.player.y),
+          angle: Math.round(this.player.angle), alive: false, won: false,
+        });
+      } catch (_) { /* ignore */ }
+    }
+
     this.deathFx.setPosition(this.player.x, this.player.y);
     this.deathFx.explode(20);
 
@@ -620,11 +826,15 @@ export class GameScene extends Phaser.Scene {
 
     this.player.setVisible(false);
 
-    // Persist incremented attempt count across the restart
-    this.game.registry.set('attempt', this.attempt + 1);
-
-    // Show restart screen after effects settle
-    this.time.delayedCall(650, () => this.showRestartPrompt());
+    if (this.isMultiplayer) {
+      // In MP mode: show a short death screen then return to MenuScene
+      this.time.delayedCall(650, () => this.showMpDeathScreen());
+    } else {
+      // Persist incremented attempt count across the restart
+      this.game.registry.set('attempt', this.attempt + 1);
+      // Show restart screen after effects settle
+      this.time.delayedCall(650, () => this.showRestartPrompt());
+    }
   }
 
   private showRestartPrompt(): void {
@@ -682,9 +892,72 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(500, () => { this.waitingForRestart = true; });
   }
 
+  private showMpDeathScreen(): void {
+    const overlay = this.add
+      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.65)
+      .setScrollFactor(0).setDepth(28).setAlpha(0);
+
+    const deathTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 70, 'YOU DIED', {
+      fontSize: '60px', color: '#ff3333', fontStyle: 'bold',
+      fontFamily: 'Arial', stroke: '#000000', strokeThickness: 7,
+    }).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0).setScale(0.4);
+
+    const subTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 5,
+      `Attempt ${this.attempt}`, {
+        fontSize: '22px', color: '#aabbdd',
+        fontFamily: 'Arial', stroke: '#000022', strokeThickness: 4,
+      }
+    ).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0);
+
+    const backTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 60,
+      'Back to Menu', {
+        fontSize: '28px', color: '#ffffff', fontStyle: 'bold',
+        fontFamily: 'Arial', stroke: '#000033', strokeThickness: 4,
+      }
+    ).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0)
+      .setInteractive({ useHandCursor: true });
+
+    this.tweens.add({ targets: overlay,   alpha: 1,          duration: 350 });
+    this.tweens.add({ targets: deathTxt,  alpha: 1, scale: 1, ease: 'Back.Out', duration: 550 });
+    this.tweens.add({ targets: subTxt,    alpha: 1,          delay: 350, duration: 400 });
+    this.tweens.add({ targets: backTxt,   alpha: 1,          delay: 550, duration: 400 });
+
+    // Pulse the back button
+    this.tweens.add({
+      targets: backTxt, alpha: 0.3,
+      yoyo: true, repeat: -1, duration: 650, delay: 1100, ease: 'Sine.easeInOut',
+    });
+
+    backTxt.on('pointerover', () => backTxt.setStyle({ color: '#88ccff' }));
+    backTxt.on('pointerout',  () => backTxt.setStyle({ color: '#ffffff' }));
+    backTxt.on('pointerdown', () => this.returnToMenu());
+
+    // Also allow click anywhere after a short delay
+    this.time.delayedCall(1000, () => {
+      this.input.once('pointerdown', () => this.returnToMenu());
+    });
+  }
+
+  private returnToMenu(): void {
+    try { activeRoom?.leave(); } catch (_) { /* ignore */ }
+    clearActiveRoom();
+    this.game.registry.set('multiplayer', false);
+    this.scene.start('MenuScene');
+  }
+
   private onWin(): void {
     if (!this.alive) return;
     this.alive = false;
+
+    // Publish win state to remote
+    if (this.isMultiplayer) {
+      try {
+        activeRoom?.player.set('pos', {
+          x: Math.round(this.player.x), y: Math.round(this.player.y),
+          angle: Math.round(this.player.angle), alive: false, won: true,
+        });
+      } catch (_) { /* ignore */ }
+    }
 
     const txt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 35, 'LEVEL COMPLETE!', {
       fontSize: '56px', color: '#ffcc00', fontStyle: 'bold',
@@ -693,7 +966,9 @@ export class GameScene extends Phaser.Scene {
 
     const sub = this.add.text(
       GAME_WIDTH / 2, GAME_HEIGHT / 2 + 45,
-      `Completed in ${this.attempt} attempt${this.attempt !== 1 ? 's' : ''}!`,
+      this.isMultiplayer
+        ? `You finished! 🏆`
+        : `Completed in ${this.attempt} attempt${this.attempt !== 1 ? 's' : ''}!`,
       { fontSize: '26px', color: '#ffffff', stroke: '#000033', strokeThickness: 4 }
     ).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0);
 
@@ -704,7 +979,12 @@ export class GameScene extends Phaser.Scene {
       yoyo: true, repeat: -1, duration: 800, delay: 800, ease: 'Sine.easeInOut',
     });
 
-    this.game.registry.set('attempt', 1);
-    this.time.delayedCall(4500, () => this.scene.restart());
+    if (this.isMultiplayer) {
+      // Return to menu after celebration
+      this.time.delayedCall(4000, () => this.returnToMenu());
+    } else {
+      this.game.registry.set('attempt', 1);
+      this.time.delayedCall(4500, () => this.scene.restart());
+    }
   }
 }
