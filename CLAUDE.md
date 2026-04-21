@@ -6,7 +6,7 @@
 - **Core mechanic**: Auto-scrolling cube that the player jumps over/onto obstacles. One button (SPACE / click / tap) to jump. Touch a spike or the side of a block = instant death. Land on top of a block = safe platform.
 
 ## Features Implemented
-- **Main Menu** (MenuScene): SOLO PLAY + ONLINE CO-OP buttons; animated bouncing preview cubes; star background
+- **Main Menu** (MenuScene): SOLO PLAY + ONLINE CO-OP + LEADERBOARD buttons; animated bouncing preview cubes; star background
 - **Online Co-op**: Lobby waits for a second player, 3-2-1 GO! countdown, then both players race the same level simultaneously
 - Auto-scrolling player cube (speed = 450 px/s) with arcade physics gravity
 - Double-jump mechanic (SPACE, UP arrow, or mouse/touch click) — 2 jumps per airborne cycle; refills on landing
@@ -22,6 +22,22 @@
 - Controls hint text (fades after 3 s)
 - Win screen with bounce-in tween and "Completed in N attempts!"
 - Attempt count persists across restarts via `game.registry`
+
+## High Score & Leaderboard
+- **Personal best** saved to `unboxy.saves` (key: `highScore`; lower attempts = better)
+  - Loaded at the start of each GameScene `create()` via `loadPersonalBest()`
+  - Saved on win (solo only) if it's a new best
+  - Shown on the win screen: "🏆 New Personal Best!" with gold particle burst if new, or "Best: N attempts" if not
+- **Global leaderboard** stored in `unboxy.gameData` (key: `leaderboard`)
+  - Submitted on solo win for authenticated users (deduplicates by `userId`, retries up to 3× on VERSION_MISMATCH)
+  - Sorted ascending by attempts (fewest = best), capped at top 100
+  - Shown in MenuScene leaderboard panel (top 10 displayed)
+- **Leaderboard panel** (MenuScene):
+  - Animated gold-framed panel with "🏆 LEADERBOARD" header
+  - Loading state while data fetches (async)
+  - 🥇🥈🥉 medals for top 3; player's own row highlighted in gold with ▶ prefix
+  - Shows personal best below if not in top 10
+  - Closed with "✕ Close" button; safe cleanup on scene shutdown
 
 ## Multiplayer Architecture
 - **MenuScene** handles the full lobby: joinOrCreate('lobby'), waits for `room.state.players.size >= 2`, sets `room.data.set('gameState', 'countdown')`, runs a 3-2-1 countdown, then transitions to GameScene
@@ -39,10 +55,10 @@
 
 ## Key Implementation Details
 - **BootScene.ts** → starts MenuScene (was GameScene)
-- **MenuScene.ts** — mode selection + online lobby (new)
-- **gameState.ts** — `activeRoom`, `setActiveRoom`, `clearActiveRoom` (new)
+- **MenuScene.ts** — mode selection + online lobby + leaderboard panel
+- **gameState.ts** — `activeRoom`, `setActiveRoom`, `clearActiveRoom`
 - **main.ts** — exports `unboxyReady = Unboxy.init(...)` for auth + rooms API
-- **GameScene.ts** — all game logic (background, ground, level, player, particles, HUD, camera, input, multiplayer)
+- **GameScene.ts** — all game logic (background, ground, level, player, particles, HUD, camera, input, multiplayer, high score)
 - **UIScene.ts** — intentionally empty; GameScene handles all HUD via `setScrollFactor(0)`
 - **Ground physics**: `add.rectangle` (13 000 × 150 px) + `physics.add.existing(rect, true)` for a reliable static body
 - **Obstacle groups**: two static groups — `obstacles` (spikes, lethal overlap) and `platforms` (blocks, collider — land on top safely, lethal on side impact)
@@ -50,16 +66,16 @@
 - **Parallax**: TileSprites with `setScrollFactor(0)`; `tilePositionX` driven by `camera.scrollX * factor` each frame
 - **Death persistence**: `this.game.registry.set('attempt', n)` before `scene.restart()` (solo only)
 - **room.state cast**: `room.state as { players: Map<string, { displayName?: string }> }` to work around `UnboxyRoom<unknown>` default
+- **personalBest**: loaded async in `loadPersonalBest()` on `create()`; 0 = no best yet; lower = better
 
 ## Controls
 - **SPACE** / **UP arrow** / **click** / **tap** — jump (only when grounded)
 - **ESC** — toggle pause (solo only)
 
 ## What Changed This Turn
-- Added online multiplayer co-op mode (two players race the same level simultaneously)
-- New MenuScene with SOLO and ONLINE CO-OP buttons, animated preview cubes, star background
-- New gameState.ts module for passing the live room reference between scenes
-- main.ts now exports `unboxyReady` (Unboxy.init promise)
-- BootScene now starts MenuScene instead of GameScene
-- GameScene: added `cube2` orange texture, remote player sprite, floating name labels, `initMultiplayer()`, `triggerRemoteDeath()`, `showMpDeathScreen()`, `returnToMenu()`, `showFloatingNotif()`
-- MP death goes to MenuScene (not restart); MP win shows trophy message then auto-returns
+- Added personal high score (fewest attempts) saved via `unboxy.saves` key `highScore`
+- Added global leaderboard via `unboxy.gameData` key `leaderboard` — submitted on solo win for authenticated users
+- Win screen now shows "🏆 New Personal Best!" (gold, pulsing, particle burst) or "Best: N attempts" (blue)
+- Added LEADERBOARD button to MenuScene (repositioned SOLO/CO-OP buttons up slightly)
+- Animated leaderboard panel with gold frame, loading state, medals 🥇🥈🥉, player row highlight, personal best footer
+- Safe async handling: panel closed while loading = no stale DOM; scene shutdown destroys overlay

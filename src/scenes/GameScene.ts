@@ -59,6 +59,7 @@ export class GameScene extends Phaser.Scene {
   private waitingForRestart  = false;
   private isPaused           = false;
   private pauseContents:     Phaser.GameObjects.GameObject[] = [];
+  private personalBest       = 0;   // 0 = no best yet (fewest attempts to complete)
   private pauseBtnX          = 0;
   private pauseBtnY          = 0;
   private pauseIconGfx!:     Phaser.GameObjects.Graphics;
@@ -104,6 +105,7 @@ export class GameScene extends Phaser.Scene {
     this.buildHUD();
     this.buildCamera();
     this.buildInput();
+    void this.loadPersonalBest();
 
     if (!this.scene.isActive('UIScene')) {
       this.scene.launch('UIScene');
@@ -436,6 +438,58 @@ export class GameScene extends Phaser.Scene {
       undefined,
       this
     );
+  }
+
+  // ── high score & leaderboard ───────────────────────────────────────────────
+
+  private async loadPersonalBest(): Promise<void> {
+    try {
+      const unboxy = await unboxyReady;
+      if (!unboxy) return;
+      const saved = await unboxy.saves.get<number>('highScore');
+      this.personalBest = typeof saved === 'number' && saved > 0 ? saved : 0;
+    } catch (err) {
+      console.warn('[game] failed to load highScore', err);
+    }
+  }
+
+  private async saveHighScore(attempts: number): Promise<void> {
+    try {
+      const unboxy = await unboxyReady;
+      if (!unboxy) return;
+      await unboxy.saves.set('highScore', attempts);
+      if (unboxy.isAuthenticated && unboxy.user) {
+        await this.submitLeaderboard(unboxy.user.id, unboxy.user.name ?? 'Player', attempts);
+      }
+    } catch (err) {
+      console.warn('[game] failed to save highScore', err);
+    }
+  }
+
+  private async submitLeaderboard(userId: string, userName: string, score: number): Promise<void> {
+    type Entry = { name: string; score: number; at: number; userId: string };
+    for (let i = 0; i < 3; i++) {
+      try {
+        const unboxy = await unboxyReady;
+        if (!unboxy) return;
+        const raw    = await unboxy.gameData.get<Entry[]>('leaderboard');
+        const list   = Array.isArray(raw) ? raw : [];
+        // Remove any previous entry for this user, add fresh one
+        const filtered = list.filter(e => e && typeof e === 'object' && e.userId !== userId);
+        const next = [...filtered, { name: userName, score, at: Date.now(), userId }]
+          .sort((a, b) => a.score - b.score)  // ascending: fewer attempts = better
+          .slice(0, 100);
+        await unboxy.gameData.set('leaderboard', next);
+        return;
+      } catch (err: unknown) {
+        const code = (err as { code?: string })?.code;
+        if (code !== 'VERSION_MISMATCH') {
+          console.warn('[game] leaderboard submit failed', err);
+          return;
+        }
+        // VERSION_MISMATCH — re-read and retry
+      }
+    }
   }
 
   // ── multiplayer ────────────────────────────────────────────────────────────
@@ -949,6 +1003,14 @@ export class GameScene extends Phaser.Scene {
     if (!this.alive) return;
     this.alive = false;
 
+    // ── personal best check (solo only) ──
+    const isNewBest = !this.isMultiplayer &&
+      (this.personalBest === 0 || this.attempt < this.personalBest);
+    if (isNewBest) {
+      this.personalBest = this.attempt;
+      void this.saveHighScore(this.attempt);
+    }
+
     // Publish win state to remote
     if (this.isMultiplayer) {
       try {
@@ -959,18 +1021,17 @@ export class GameScene extends Phaser.Scene {
       } catch (_) { /* ignore */ }
     }
 
-    const txt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 35, 'LEVEL COMPLETE!', {
+    const txt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 45, 'LEVEL COMPLETE!', {
       fontSize: '56px', color: '#ffcc00', fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 6,
     }).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0).setScale(0.5);
 
-    const sub = this.add.text(
-      GAME_WIDTH / 2, GAME_HEIGHT / 2 + 45,
-      this.isMultiplayer
-        ? `You finished! 🏆`
-        : `Completed in ${this.attempt} attempt${this.attempt !== 1 ? 's' : ''}!`,
-      { fontSize: '26px', color: '#ffffff', stroke: '#000033', strokeThickness: 4 }
-    ).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0);
+    const subMsg = this.isMultiplayer
+      ? `You finished! 🏆`
+      : `Completed in ${this.attempt} attempt${this.attempt !== 1 ? 's' : ''}!`;
+    const sub = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 25, subMsg, {
+      fontSize: '26px', color: '#ffffff', stroke: '#000033', strokeThickness: 4,
+    }).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0);
 
     this.tweens.add({ targets: txt, alpha: 1, scale: 1, ease: 'Back.Out', duration: 700 });
     this.tweens.add({ targets: sub, alpha: 1, delay: 500, duration: 600 });
@@ -979,12 +1040,53 @@ export class GameScene extends Phaser.Scene {
       yoyo: true, repeat: -1, duration: 800, delay: 800, ease: 'Sine.easeInOut',
     });
 
+    // ── personal best banner (solo only) ──
+    if (!this.isMultiplayer) {
+      const bestMsg = isNewBest
+        ? '🏆 New Personal Best!'
+        : this.personalBest > 0
+          ? `Best: ${this.personalBest} attempt${this.personalBest !== 1 ? 's' : ''}`
+          : '';
+      if (bestMsg) {
+        const bestTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 72, bestMsg, {
+          fontSize: '22px',
+          color: isNewBest ? '#ffd700' : '#88bbff',
+          fontFamily: 'Arial',
+          fontStyle: isNewBest ? 'bold' : 'normal',
+          stroke: '#000033', strokeThickness: 3,
+        }).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0);
+
+        this.tweens.add({ targets: bestTxt, alpha: 1, delay: 850, duration: 600 });
+
+        if (isNewBest) {
+          // Pulse the new best text
+          this.tweens.add({
+            targets: bestTxt, scaleX: 1.1, scaleY: 1.1,
+            yoyo: true, repeat: -1, duration: 550, delay: 1500, ease: 'Sine.easeInOut',
+          });
+          // Gold particle burst
+          const fx = this.add.particles(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 72, 'pixel', {
+            speed: { min: 60, max: 220 },
+            angle: { min: 0, max: 360 },
+            scale: { start: 2, end: 0 },
+            alpha: { start: 1, end: 0 },
+            lifespan: 800,
+            tint: [0xffd700, 0xffee44, 0xffcc00, 0xffffff],
+            quantity: 0,
+            emitting: false,
+          }).setScrollFactor(0).setDepth(31);
+          this.time.delayedCall(950, () => fx.explode(18));
+          this.time.delayedCall(1800, () => fx.destroy());
+        }
+      }
+    }
+
     if (this.isMultiplayer) {
       // Return to menu after celebration
       this.time.delayedCall(4000, () => this.returnToMenu());
     } else {
       this.game.registry.set('attempt', 1);
-      this.time.delayedCall(4500, () => this.scene.restart());
+      this.time.delayedCall(5000, () => this.scene.restart());
     }
   }
 }

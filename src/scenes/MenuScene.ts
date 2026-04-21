@@ -14,9 +14,10 @@ export class MenuScene extends Phaser.Scene {
   private offState?:        () => void;
   private offLeave?:        () => void;
   private offError?:        () => void;
-  private countdownStarted  = false;
-  private isTransitioning   = false;
-  private lobbyOverlay:     Phaser.GameObjects.GameObject[] = [];
+  private countdownStarted    = false;
+  private isTransitioning     = false;
+  private lobbyOverlay:       Phaser.GameObjects.GameObject[] = [];
+  private leaderboardOverlay: Phaser.GameObjects.GameObject[] = [];
 
   constructor() { super({ key: 'MenuScene' }); }
 
@@ -24,10 +25,11 @@ export class MenuScene extends Phaser.Scene {
 
   create(): void {
     // Reset every time we arrive at this scene (may come back from a game)
-    this.countdownStarted = false;
-    this.isTransitioning  = false;
-    this.room             = null;
-    this.lobbyOverlay     = [];
+    this.countdownStarted   = false;
+    this.isTransitioning    = false;
+    this.room               = null;
+    this.lobbyOverlay       = [];
+    this.leaderboardOverlay = [];
 
     // Make sure the multiplayer flag is cleared
     this.game.registry.set('multiplayer', false);
@@ -42,6 +44,7 @@ export class MenuScene extends Phaser.Scene {
       this.offState?.();
       this.offLeave?.();
       this.offError?.();
+      this.closeLeaderboard();
     });
   }
 
@@ -182,13 +185,17 @@ export class MenuScene extends Phaser.Scene {
   // ── buttons ────────────────────────────────────────────────────────────────
 
   private buildButtons(): void {
-    this.makeButton(GAME_WIDTH / 2, 370, 'SOLO PLAY', 0x1155cc, 0x2277ff, () => {
+    this.makeButton(GAME_WIDTH / 2, 335, 'SOLO PLAY', 0x1155cc, 0x2277ff, () => {
       this.scene.start('GameScene');
     }, 0);
 
-    this.makeButton(GAME_WIDTH / 2, 460, 'ONLINE CO-OP  🌐', 0x116633, 0x22aa55, () => {
+    this.makeButton(GAME_WIDTH / 2, 425, 'ONLINE CO-OP  🌐', 0x116633, 0x22aa55, () => {
       this.joinOnline();
-    }, 220);
+    }, 200);
+
+    this.makeButton(GAME_WIDTH / 2, 515, '🏆  LEADERBOARD', 0x3d2800, 0x7a5200, () => {
+      void this.showLeaderboard();
+    }, 380);
   }
 
   private makeButton(
@@ -463,6 +470,185 @@ export class MenuScene extends Phaser.Scene {
     };
 
     tick();
+  }
+
+  // ── leaderboard panel ──────────────────────────────────────────────────────
+
+  private closeLeaderboard(): void {
+    this.leaderboardOverlay.forEach(o => { try { o.destroy(); } catch (_) { /* already gone */ } });
+    this.leaderboardOverlay = [];
+  }
+
+  private async showLeaderboard(): Promise<void> {
+    this.closeLeaderboard();
+
+    const CX = GAME_WIDTH / 2;
+    const CY = GAME_HEIGHT / 2;
+    const PW = 640, PH = 460;
+
+    // ── static parts: scrim, panel shell, header ──
+    const scrim = this.add
+      .rectangle(CX, CY, GAME_WIDTH, GAME_HEIGHT, 0x000011, 0.88)
+      .setDepth(30).setAlpha(0).setInteractive(); // blocks clicks behind
+    this.tweens.add({ targets: scrim, alpha: 1, duration: 250 });
+
+    const panelGfx = this.add.graphics().setDepth(31).setAlpha(0);
+    panelGfx.fillStyle(0x070e24, 0.97);
+    panelGfx.fillRoundedRect(CX - PW / 2, CY - PH / 2, PW, PH, 22);
+    panelGfx.lineStyle(2.5, 0xffd700, 0.75);
+    panelGfx.strokeRoundedRect(CX - PW / 2, CY - PH / 2, PW, PH, 22);
+    // Inner decorative line
+    panelGfx.lineStyle(1, 0x443300, 0.5);
+    panelGfx.strokeRoundedRect(CX - PW / 2 + 8, CY - PH / 2 + 8, PW - 16, PH - 16, 16);
+    this.tweens.add({ targets: panelGfx, alpha: 1, delay: 80, duration: 320 });
+
+    const header = this.add.text(CX, CY - PH / 2 + 40, '🏆  LEADERBOARD', {
+      fontSize: '36px', color: '#ffd700', fontStyle: 'bold',
+      fontFamily: 'Arial', stroke: '#000033', strokeThickness: 6,
+    }).setDepth(32).setOrigin(0.5).setAlpha(0).setScale(0.4);
+    this.tweens.add({ targets: header, alpha: 1, scale: 1, ease: 'Back.Out', duration: 520, delay: 120 });
+
+    // Loading dots
+    const loadTxt = this.add.text(CX, CY, 'Loading...', {
+      fontSize: '22px', color: '#6688aa', fontFamily: 'Arial',
+    }).setDepth(32).setOrigin(0.5).setAlpha(0);
+    this.tweens.add({ targets: loadTxt, alpha: 1, delay: 250, duration: 300 });
+
+    // Close button
+    const closeTxt = this.add.text(CX, CY + PH / 2 - 30, '✕  Close', {
+      fontSize: '20px', color: '#5577aa', fontFamily: 'Arial',
+      stroke: '#000022', strokeThickness: 2,
+    }).setDepth(32).setOrigin(0.5).setAlpha(0).setInteractive({ useHandCursor: true });
+    this.tweens.add({ targets: closeTxt, alpha: 1, delay: 450, duration: 300 });
+    closeTxt.on('pointerover', () => closeTxt.setStyle({ color: '#aaccff' }));
+    closeTxt.on('pointerout',  () => closeTxt.setStyle({ color: '#5577aa' }));
+    closeTxt.on('pointerdown', () => this.closeLeaderboard());
+
+    this.leaderboardOverlay = [scrim, panelGfx, header, loadTxt, closeTxt];
+
+    // ── fetch data ──
+    type Entry = { name: string; score: number; at: number; userId: string };
+    let entries: Entry[] = [];
+    let myUserId = '';
+    let myBest   = 0;
+
+    try {
+      const unboxy = await unboxyReady;
+      if (unboxy) {
+        myUserId = unboxy.user?.id ?? '';
+        const [rawBoard, rawBest] = await Promise.all([
+          unboxy.gameData.get<Entry[]>('leaderboard').catch(() => null),
+          unboxy.saves.get<number>('highScore').catch(() => null),
+        ]);
+        if (Array.isArray(rawBoard)) {
+          entries = rawBoard
+            .filter(e => e && typeof e === 'object' && typeof e.score === 'number')
+            .slice(0, 10);
+        }
+        myBest = typeof rawBest === 'number' && rawBest > 0 ? rawBest : 0;
+      }
+    } catch (err) {
+      console.warn('[menu] leaderboard load failed', err);
+    }
+
+    // If panel was closed while loading, bail out
+    if (this.leaderboardOverlay.length === 0) return;
+
+    // Remove loading text
+    loadTxt.destroy();
+    this.leaderboardOverlay = this.leaderboardOverlay.filter(o => o !== loadTxt);
+
+    const LX = CX - PW / 2 + 30; // left edge of content
+    const RX = CX + PW / 2 - 30; // right edge of content
+    const topY = CY - PH / 2 + 85;
+
+    if (entries.length === 0) {
+      // ── empty state ──
+      const emptyTxt = this.add.text(CX, CY - 20,
+        'No entries yet.\nComplete the level to get on the board!', {
+          fontSize: '20px', color: '#445566', fontFamily: 'Arial', align: 'center',
+        }).setDepth(32).setOrigin(0.5).setAlpha(0);
+      this.tweens.add({ targets: emptyTxt, alpha: 1, duration: 400 });
+      this.leaderboardOverlay.push(emptyTxt);
+
+      if (myBest > 0) {
+        const yourTxt = this.add.text(CX, CY + 50,
+          `Your best: ${myBest} attempt${myBest !== 1 ? 's' : ''}`, {
+            fontSize: '20px', color: '#88aacc', fontFamily: 'Arial', fontStyle: 'bold',
+          }).setDepth(32).setOrigin(0.5).setAlpha(0);
+        this.tweens.add({ targets: yourTxt, alpha: 1, delay: 250, duration: 400 });
+        this.leaderboardOverlay.push(yourTxt);
+      }
+    } else {
+      // ── divider + column headers ──
+      const divGfx = this.add.graphics().setDepth(31);
+      divGfx.lineStyle(1, 0x443300, 0.7);
+      divGfx.lineBetween(LX, topY - 4, RX, topY - 4);
+      this.leaderboardOverlay.push(divGfx);
+
+      const colRankHdr = this.add.text(LX,      topY + 4, '#',        { fontSize: '14px', color: '#665500', fontFamily: 'Arial', fontStyle: 'italic' }).setDepth(32).setOrigin(0, 0);
+      const colNameHdr = this.add.text(LX + 50, topY + 4, 'Player',   { fontSize: '14px', color: '#665500', fontFamily: 'Arial', fontStyle: 'italic' }).setDepth(32).setOrigin(0, 0);
+      const colScorHdr = this.add.text(RX,      topY + 4, 'Attempts', { fontSize: '14px', color: '#665500', fontFamily: 'Arial', fontStyle: 'italic' }).setDepth(32).setOrigin(1, 0);
+      this.leaderboardOverlay.push(colRankHdr, colNameHdr, colScorHdr);
+
+      const ROW_H = 36;
+      const startY = topY + 26;
+      const newObjs: Phaser.GameObjects.GameObject[] = [];
+
+      entries.forEach((entry, i) => {
+        const isMe  = !!myUserId && entry.userId === myUserId;
+        const rowY  = startY + i * ROW_H;
+
+        // Row highlight for the player's own entry
+        if (isMe) {
+          const hl = this.add.graphics().setDepth(31.5);
+          hl.fillStyle(0x2a1e00, 0.6);
+          hl.fillRoundedRect(LX - 8, rowY - 2, RX - LX + 16, ROW_H - 4, 6);
+          hl.lineStyle(1, 0xffd700, 0.4);
+          hl.strokeRoundedRect(LX - 8, rowY - 2, RX - LX + 16, ROW_H - 4, 6);
+          newObjs.push(hl);
+        }
+
+        // Medal / rank
+        const medal    = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`;
+        const rankCol  = i === 0 ? '#ffd700' : i === 1 ? '#c0c0c0' : i === 2 ? '#cd7f32' : '#445566';
+        const textCol  = isMe ? '#ffd700' : i < 3 ? '#ffffff' : '#aabbcc';
+        const bold     = isMe || i < 3;
+
+        const rankTxt  = this.add.text(LX,      rowY + ROW_H / 2, medal,
+          { fontSize: i < 3 ? '18px' : '15px', color: rankCol, fontFamily: 'Arial', fontStyle: bold ? 'bold' : 'normal' })
+          .setDepth(32).setOrigin(0, 0.5).setAlpha(0);
+
+        const nameTxt  = this.add.text(LX + 50, rowY + ROW_H / 2,
+          (isMe ? '▶ ' : '') + (entry.name || 'Anonymous'), {
+            fontSize: '17px', color: textCol, fontFamily: 'Arial', fontStyle: bold ? 'bold' : 'normal',
+          }).setDepth(32).setOrigin(0, 0.5).setAlpha(0);
+
+        const scoreTxt = this.add.text(RX, rowY + ROW_H / 2,
+          `${entry.score}`, {
+            fontSize: '17px', color: textCol, fontFamily: 'Arial', fontStyle: bold ? 'bold' : 'normal',
+          }).setDepth(32).setOrigin(1, 0.5).setAlpha(0);
+
+        newObjs.push(rankTxt, nameTxt, scoreTxt);
+
+        // Staggered fade-in
+        const d = 300 + i * 60;
+        this.tweens.add({ targets: [rankTxt, nameTxt, scoreTxt], alpha: 1, x: `+=0`, delay: d, duration: 280 });
+      });
+
+      // Show personal best if not in the top-10 list
+      const inList = entries.some(e => e.userId === myUserId);
+      if (myBest > 0 && !inList) {
+        const footerTxt = this.add.text(CX, CY + PH / 2 - 65,
+          `Your best: ${myBest} attempt${myBest !== 1 ? 's' : ''} — not in top 10 yet`, {
+            fontSize: '15px', color: '#5577aa', fontFamily: 'Arial',
+          }).setDepth(32).setOrigin(0.5).setAlpha(0);
+        this.tweens.add({ targets: footerTxt, alpha: 1, delay: 600, duration: 400 });
+        newObjs.push(footerTxt);
+      }
+
+      newObjs.forEach(o => this.leaderboardOverlay.push(o));
+    }
   }
 
   // ── toast notification ─────────────────────────────────────────────────────
