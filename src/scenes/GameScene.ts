@@ -210,20 +210,15 @@ export class GameScene extends Phaser.Scene {
   private setupMultiplayer(): void {
     const room = this.mpRoom;
 
-    // Receive remote pilot positions
-    const offPos = room.on('pos', (data: { from: string; x: number; y: number }) => {
+    // Receive enemy kills from other pilots (transient relay — correct for one-shot events)
+    // pts is included so both clients share the same team score
+    const offKill = room.on('kill', (data: { from: string; id: string; pts?: number }) => {
       if (!data || data.from === room.sessionId) return;
-      const rp = this.remotePlayers.get(data.from);
-      if (rp) { rp.targetX = data.x; rp.targetY = data.y; }
+      this.applyRemoteKill(data.id, data.pts ?? 0);
     });
 
-    // Receive enemy kills from other pilots
-    const offKill = room.on('kill', (data: { from: string; id: string }) => {
-      if (!data || data.from === room.sessionId) return;
-      this.applyRemoteKill(data.id);
-    });
-
-    // Sync player list (adds / removes remote pilot sprites)
+    // Sync player list AND remote positions from delta-synced state (SDK 0.2.6)
+    // Position arrives via room.player.set('pos', {x}), not via send/on
     const offState = room.onStateChange((state: any) => {
       this.syncRemotePlayers(state);
     });
@@ -231,7 +226,7 @@ export class GameScene extends Phaser.Scene {
     // Room disconnection
     room.onLeave(() => { this.isMultiplayer = false; });
 
-    this.mpUnsubs.push(offPos, offKill, offState);
+    this.mpUnsubs.push(offKill, offState);
 
     // Initial render if state is already available
     if (room.state) this.syncRemotePlayers(room.state);

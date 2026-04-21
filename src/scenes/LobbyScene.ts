@@ -103,7 +103,8 @@ export class LobbyScene extends Phaser.Scene {
 
   private toggleReady(): void {
     this.isReady = !this.isReady;
-    try { this.room.send('ready', { ready: this.isReady }); } catch {}
+    // Persist ready state to delta-synced player state (SDK 0.2.6)
+    try { this.room.player.set('ready', this.isReady); } catch {}
     this.readyBtn.setText(this.isReady ? '[ ✓  READY! ]' : '[ READY ]');
     this.readyBtn.setColor(this.isReady ? '#44ff88' : '#aabbcc');
     if (this.isReady) {
@@ -145,7 +146,8 @@ export class LobbyScene extends Phaser.Scene {
     entries.forEach(([sid, pData], i) => {
       const isMe   = this.room && sid === this.room.sessionId;
       const name   = pData?.displayName ?? pData?.name ?? 'PILOT';
-      const ready  = pData?.ready ?? false;
+      // Read ready flag from delta-synced player state (SDK 0.2.6: room.player.get)
+      const ready  = (this.room?.player.get<boolean>(sid, 'ready')) ?? false;
       const col    = PILOT_COLORS[i % PILOT_COLORS.length];
       const colInt = PILOT_INTS[i % PILOT_INTS.length];
       const y      = baseY + 52 + i * 48;
@@ -196,7 +198,8 @@ export class LobbyScene extends Phaser.Scene {
     if (this.launching) return;
     const entries = this.toEntries(state?.players);
     if (entries.length < 2) return;
-    if (!entries.every(([, p]) => p?.ready)) return;
+    // Check ready flag from delta-synced state (SDK 0.2.6)
+    if (!entries.every(([sid]) => (this.room?.player.get<boolean>(sid, 'ready')) ?? false)) return;
 
     this.launching = true;
     this.statusText.setColor('#44ff88').setText('All pilots ready!  Launching…');
