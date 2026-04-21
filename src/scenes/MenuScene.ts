@@ -573,7 +573,7 @@ export class MenuScene extends Phaser.Scene {
 
       if (myBest > 0) {
         const yourTxt = this.add.text(CX, CY + 50,
-          `Your best: ${myBest} attempt${myBest !== 1 ? 's' : ''}`, {
+          `Your best: ${myBest}%`, {
             fontSize: '20px', color: '#88aacc', fontFamily: 'Arial', fontStyle: 'bold',
           }).setDepth(32).setOrigin(0.5).setAlpha(0);
         this.tweens.add({ targets: yourTxt, alpha: 1, delay: 250, duration: 400 });
@@ -588,7 +588,7 @@ export class MenuScene extends Phaser.Scene {
 
       const colRankHdr = this.add.text(LX,      topY + 4, '#',        { fontSize: '14px', color: '#665500', fontFamily: 'Arial', fontStyle: 'italic' }).setDepth(32).setOrigin(0, 0);
       const colNameHdr = this.add.text(LX + 50, topY + 4, 'Player',   { fontSize: '14px', color: '#665500', fontFamily: 'Arial', fontStyle: 'italic' }).setDepth(32).setOrigin(0, 0);
-      const colScorHdr = this.add.text(RX,      topY + 4, 'Attempts', { fontSize: '14px', color: '#665500', fontFamily: 'Arial', fontStyle: 'italic' }).setDepth(32).setOrigin(1, 0);
+      const colScorHdr = this.add.text(RX,      topY + 4, 'Best %',   { fontSize: '14px', color: '#665500', fontFamily: 'Arial', fontStyle: 'italic' }).setDepth(32).setOrigin(1, 0);
       this.leaderboardOverlay.push(colRankHdr, colNameHdr, colScorHdr);
 
       const ROW_H = 36;
@@ -625,7 +625,7 @@ export class MenuScene extends Phaser.Scene {
           }).setDepth(32).setOrigin(0, 0.5).setAlpha(0);
 
         const scoreTxt = this.add.text(RX, rowY + ROW_H / 2,
-          `${entry.score}`, {
+          `${entry.score}%`, {
             fontSize: '17px', color: textCol, fontFamily: 'Arial', fontStyle: bold ? 'bold' : 'normal',
           }).setDepth(32).setOrigin(1, 0.5).setAlpha(0);
 
@@ -640,7 +640,7 @@ export class MenuScene extends Phaser.Scene {
       const inList = entries.some(e => e.userId === myUserId);
       if (myBest > 0 && !inList) {
         const footerTxt = this.add.text(CX, CY + PH / 2 - 65,
-          `Your best: ${myBest} attempt${myBest !== 1 ? 's' : ''} — not in top 10 yet`, {
+          `Your best: ${myBest}% — not in top 10 yet`, {
             fontSize: '15px', color: '#5577aa', fontFamily: 'Arial',
           }).setDepth(32).setOrigin(0.5).setAlpha(0);
         this.tweens.add({ targets: footerTxt, alpha: 1, delay: 600, duration: 400 });

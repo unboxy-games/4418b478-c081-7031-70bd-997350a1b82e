@@ -59,7 +59,8 @@ export class GameScene extends Phaser.Scene {
   private waitingForRestart  = false;
   private isPaused           = false;
   private pauseContents:     Phaser.GameObjects.GameObject[] = [];
-  private personalBest       = 0;   // 0 = no best yet (fewest attempts to complete)
+  private personalBest       = 0;   // 0 = no best yet; highest % reached (0-100)
+  private currentRunMaxPct   = 0;   // max % reached in the current run
   private pauseBtnX          = 0;
   private pauseBtnY          = 0;
   private pauseIconGfx!:     Phaser.GameObjects.Graphics;
@@ -91,7 +92,8 @@ export class GameScene extends Phaser.Scene {
     this.localNameTxt       = undefined;
     this.remoteNameTxt      = undefined;
     this.remoteAlive        = true;
-    this.attempt     = (this.game.registry.get('attempt') as number) ?? 1;
+    this.attempt         = (this.game.registry.get('attempt') as number) ?? 1;
+    this.currentRunMaxPct = 0;
 
     this.physics.world.setBounds(0, 0, WORLD_W, GAME_HEIGHT);
     this.physics.world.gravity.y = GRAVITY;
@@ -152,9 +154,11 @@ export class GameScene extends Phaser.Scene {
     this.bgLayers.forEach((layer, i) => { layer.tilePositionX = cx * speeds[i]; });
 
     // ── progress bar ──
-    const pct = Math.min(this.player.x / WORLD_W, 1);
+    const pct    = Math.min(this.player.x / WORLD_W, 1);
+    const pctInt = Math.floor(pct * 100);
     this.progressFill.setSize((GAME_WIDTH - 60) * pct, 8);
-    this.percentTxt.setText(Math.floor(pct * 100) + '%');
+    this.percentTxt.setText(pctInt + '%');
+    if (pctInt > this.currentRunMaxPct) this.currentRunMaxPct = pctInt;
 
     // ── win check ──
     if (this.player.x >= WORLD_W - 300) this.onWin();
@@ -477,7 +481,7 @@ export class GameScene extends Phaser.Scene {
         // Remove any previous entry for this user, add fresh one
         const filtered = list.filter(e => e && typeof e === 'object' && e.userId !== userId);
         const next = [...filtered, { name: userName, score, at: Date.now(), userId }]
-          .sort((a, b) => a.score - b.score)  // ascending: fewer attempts = better
+          .sort((a, b) => b.score - a.score)  // descending: higher % = better
           .slice(0, 100);
         await unboxy.gameData.set('leaderboard', next);
         return;
@@ -884,36 +888,66 @@ export class GameScene extends Phaser.Scene {
       // In MP mode: show a short death screen then return to MenuScene
       this.time.delayedCall(650, () => this.showMpDeathScreen());
     } else {
+      // ── personal best check on death (highest % reached) ──
+      const isNewBest = this.currentRunMaxPct > this.personalBest;
+      if (isNewBest) {
+        this.personalBest = this.currentRunMaxPct;
+        void this.saveHighScore(this.currentRunMaxPct);
+      }
       // Persist incremented attempt count across the restart
       this.game.registry.set('attempt', this.attempt + 1);
       // Show restart screen after effects settle
-      this.time.delayedCall(650, () => this.showRestartPrompt());
+      this.time.delayedCall(650, () => this.showRestartPrompt(isNewBest));
     }
   }
 
-  private showRestartPrompt(): void {
+  private showRestartPrompt(isNewBest: boolean = false): void {
     // Semi-transparent dark overlay (camera-fixed)
     const overlay = this.add
       .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.6)
       .setScrollFactor(0).setDepth(28).setAlpha(0);
 
     // "YOU DIED" header
-    const deathTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 60, 'YOU DIED', {
+    const deathTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 72, 'YOU DIED', {
       fontSize: '60px', color: '#ff3333', fontStyle: 'bold',
       fontFamily: 'Arial', stroke: '#000000', strokeThickness: 7,
     }).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0).setScale(0.4);
 
-    // Attempt label
-    const attemptNum = this.game.registry.get('attempt') as number;
-    const attemptLbl = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 10,
-      `Attempt ${attemptNum - 1}`, {
+    // "Reached X%" this run
+    const reachTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 8,
+      `Reached  ${this.currentRunMaxPct}%`, {
         fontSize: '22px', color: '#aabbdd',
         fontFamily: 'Arial', stroke: '#000022', strokeThickness: 4,
       }
     ).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0);
 
+    // Personal best line
+    const bestMsg = isNewBest
+      ? `🏆 New Best: ${this.personalBest}%!`
+      : this.personalBest > 0
+        ? `Best: ${this.personalBest}%`
+        : '';
+    const bestTxt = bestMsg
+      ? this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 30, bestMsg, {
+          fontSize: '20px',
+          color: isNewBest ? '#ffd700' : '#7799cc',
+          fontFamily: 'Arial',
+          fontStyle: isNewBest ? 'bold' : 'normal',
+          stroke: '#000022', strokeThickness: 3,
+        }).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0)
+      : null;
+
+    // Attempt counter
+    const attemptNum = this.game.registry.get('attempt') as number;
+    const attemptLbl = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + (bestMsg ? 62 : 38),
+      `Attempt ${attemptNum - 1}`, {
+        fontSize: '18px', color: '#667788',
+        fontFamily: 'Arial', stroke: '#000022', strokeThickness: 3,
+      }
+    ).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0);
+
     // "Tap or click to restart" prompt
-    const restartTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 58,
+    const restartTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + (bestMsg ? 100 : 76),
       'Tap  /  Click  to  Restart', {
         fontSize: '26px', color: '#ffffff',
         fontFamily: 'Arial', stroke: '#000033', strokeThickness: 4,
@@ -924,20 +958,36 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: overlay, alpha: 1, duration: 350 });
 
     // Bounce in "YOU DIED"
-    this.tweens.add({
-      targets: deathTxt, alpha: 1, scale: 1,
-      ease: 'Back.Out', duration: 550,
-    });
+    this.tweens.add({ targets: deathTxt, alpha: 1, scale: 1, ease: 'Back.Out', duration: 550 });
 
     // Slide + fade in sub-labels
-    this.tweens.add({ targets: attemptLbl, alpha: 1, delay: 350, duration: 400 });
-    this.tweens.add({ targets: restartTxt, alpha: 1, delay: 550, duration: 400 });
+    this.tweens.add({ targets: reachTxt,  alpha: 1, delay: 350, duration: 400 });
+    if (bestTxt) {
+      this.tweens.add({ targets: bestTxt, alpha: 1, delay: 480, duration: 400 });
+      if (isNewBest) {
+        this.tweens.add({
+          targets: bestTxt, scaleX: 1.08, scaleY: 1.08,
+          yoyo: true, repeat: -1, duration: 550, delay: 900, ease: 'Sine.easeInOut',
+        });
+        // Gold sparkle burst for new best
+        const fx = this.add.particles(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 30, 'pixel', {
+          speed: { min: 40, max: 160 }, angle: { min: 0, max: 360 },
+          scale: { start: 1.5, end: 0 }, alpha: { start: 1, end: 0 },
+          lifespan: 700, tint: [0xffd700, 0xffee44, 0xffcc00],
+          quantity: 0, emitting: false,
+        }).setScrollFactor(0).setDepth(31);
+        this.time.delayedCall(580, () => fx.explode(12));
+        this.time.delayedCall(1400, () => fx.destroy());
+      }
+    }
+    this.tweens.add({ targets: attemptLbl,  alpha: 1, delay: 560, duration: 350 });
+    this.tweens.add({ targets: restartTxt,  alpha: 1, delay: 680, duration: 400 });
 
     // Pulse the restart label
     this.tweens.add({
       targets: restartTxt, alpha: 0.25,
       yoyo: true, repeat: -1,
-      duration: 650, delay: 1050,
+      duration: 650, delay: 1200,
       ease: 'Sine.easeInOut',
     });
 
@@ -1003,12 +1053,11 @@ export class GameScene extends Phaser.Scene {
     if (!this.alive) return;
     this.alive = false;
 
-    // ── personal best check (solo only) ──
-    const isNewBest = !this.isMultiplayer &&
-      (this.personalBest === 0 || this.attempt < this.personalBest);
+    // ── personal best check (solo only) — 100% = level complete ──
+    const isNewBest = !this.isMultiplayer && 100 > this.personalBest;
     if (isNewBest) {
-      this.personalBest = this.attempt;
-      void this.saveHighScore(this.attempt);
+      this.personalBest = 100;
+      void this.saveHighScore(100);
     }
 
     // Publish win state to remote
@@ -1043,9 +1092,9 @@ export class GameScene extends Phaser.Scene {
     // ── personal best banner (solo only) ──
     if (!this.isMultiplayer) {
       const bestMsg = isNewBest
-        ? '🏆 New Personal Best!'
-        : this.personalBest > 0
-          ? `Best: ${this.personalBest} attempt${this.personalBest !== 1 ? 's' : ''}`
+        ? '🏆 First Clear! New Best: 100%!'
+        : this.personalBest >= 100
+          ? 'Level already cleared — great run!'
           : '';
       if (bestMsg) {
         const bestTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 72, bestMsg, {

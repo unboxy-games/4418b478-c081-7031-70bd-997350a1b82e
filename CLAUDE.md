@@ -24,18 +24,22 @@
 - Attempt count persists across restarts via `game.registry`
 
 ## High Score & Leaderboard
-- **Personal best** saved to `unboxy.saves` (key: `highScore`; lower attempts = better)
+- **Personal best** saved to `unboxy.saves` (key: `highScore`; highest % reached = better, 0–100)
   - Loaded at the start of each GameScene `create()` via `loadPersonalBest()`
-  - Saved on win (solo only) if it's a new best
-  - Shown on the win screen: "🏆 New Personal Best!" with gold particle burst if new, or "Best: N attempts" if not
+  - `currentRunMaxPct` tracks the highest % reached each run (updated in `update()`)
+  - Saved on **death** if `currentRunMaxPct > personalBest` (so players see progress even without completing)
+  - Also saved on **win** (100%) if first completion
+  - Shown on the death/restart screen: "🏆 New Best: X%!" with gold sparkle burst, or "Best: X%" in blue
+  - Shown on the win screen: "🏆 First Clear! New Best: 100%!" or "Level already cleared"
 - **Global leaderboard** stored in `unboxy.gameData` (key: `leaderboard`)
-  - Submitted on solo win for authenticated users (deduplicates by `userId`, retries up to 3× on VERSION_MISMATCH)
-  - Sorted ascending by attempts (fewest = best), capped at top 100
+  - Submitted on death (if new best %) or win (100%) for authenticated users
+  - Sorted descending by % (higher = better), deduplicates by `userId`, capped at top 100
   - Shown in MenuScene leaderboard panel (top 10 displayed)
 - **Leaderboard panel** (MenuScene):
   - Animated gold-framed panel with "🏆 LEADERBOARD" header
   - Loading state while data fetches (async)
   - 🥇🥈🥉 medals for top 3; player's own row highlighted in gold with ▶ prefix
+  - "Best %" column header; score displayed as "X%"
   - Shows personal best below if not in top 10
   - Closed with "✕ Close" button; safe cleanup on scene shutdown
 
@@ -73,9 +77,9 @@
 - **ESC** — toggle pause (solo only)
 
 ## What Changed This Turn
-- Added personal high score (fewest attempts) saved via `unboxy.saves` key `highScore`
-- Added global leaderboard via `unboxy.gameData` key `leaderboard` — submitted on solo win for authenticated users
-- Win screen now shows "🏆 New Personal Best!" (gold, pulsing, particle burst) or "Best: N attempts" (blue)
-- Added LEADERBOARD button to MenuScene (repositioned SOLO/CO-OP buttons up slightly)
-- Animated leaderboard panel with gold frame, loading state, medals 🥇🥈🥉, player row highlight, personal best footer
-- Safe async handling: panel closed while loading = no stale DOM; scene shutdown destroys overlay
+- Changed high score metric from "fewest attempts" to **"highest % reached"** (0–100), tracked per run via `currentRunMaxPct`
+- Score now saved on **death** (if new best %) not just on win — every player gets a score regardless of completion
+- Death/restart screen now shows "Reached X%" for current run + "🏆 New Best: X%!" or "Best: X%"
+- Win screen shows "🏆 First Clear! New Best: 100%!" or "Level already cleared"
+- Global leaderboard now sorts descending (higher % = better rank); score shown as "X%" in the panel
+- Leaderboard column header updated from "Attempts" to "Best %"
