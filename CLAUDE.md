@@ -48,6 +48,15 @@ Entry (left, row 1) → right to col 3 → down to row 3 → right to col 7 → 
 - Tower shows range ring for 1.2 seconds after placement
 
 ## Changed This Turn
+- **Multiplayer receive-side handlers complete** (`GameScene.ts`):
+  - Implemented `setupMultiplayer()` — registers all `mpRoom.on()` listeners and stores unsubscribe fns in `mpCleanupFns`; all cleanup runs on scene `shutdown`
+  - **Host receives from guest**: `place-tower` (validate, deduct gold, spawn Tower, syncHostState), `sell-tower` (validate, refund, destroy Tower, syncHostState), `start-wave` (calls `startWave()`)
+  - **Guest receives from host**: `state-sync` (updates lives/gold/waveNum/score; reconciles tower list — creates missing, removes sold), `enemy-sync` (creates/updates/removes ghost Enemy objects from `guestEnemies` map), `wave-started` (hides start button, shows wave banner), `wave-complete` (adds bonus gold, shows clear banner, re-shows start button), `game-over` (calls `triggerGameOver()`)
+  - Implemented `syncHostState()` — sends `state-sync` message with lives, gold, waveNum, score, waveActive, and full tower list
+  - Implemented `syncEnemies()` — sends `enemy-sync` with per-alive-enemy snapshot (id, type, x, y, hp, maxHp) at ~6 Hz
+  - Tower reconciliation bug fix: uses `cell === null` guard (not `!cell`) to avoid accidentally re-creating 'path' tiles
+
+## Previously Changed
 - **Sell button ghost-placement bug fix** (`GameScene.ts`):
   - Root cause: sell button's `pointerdown` fires first → `executeSell()` destroys `sellBtnContainer` (sets it to `null`) → global scene `pointerdown` handler then runs, finds `sellBtnContainer === null`, skips the bounds guard, and calls `tryPlaceTower` on the now-empty cell
   - Fix: `executeSell()` now sets `_blockNextTileTap = true` before doing anything; the global `pointerdown` handler checks this flag first and returns early (consuming the flag), so no tower is ever placed on a sell-click

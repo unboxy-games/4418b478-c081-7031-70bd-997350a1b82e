@@ -1020,4 +1020,255 @@ export class GameScene extends Phaser.Scene {
       this.onWaveComplete();
     }
   }
+
+  // ── Multiplayer setup & sync ─────────────────────────────────────────────
+
+  private setupMultiplayer(): void {
+    if (!this.mpRoom) return;
+
+    // Unsubscribe all handlers when the scene shuts down
+    this.events.once('shutdown', () => {
+      this.mpCleanupFns.forEach(fn => { try { fn(); } catch {} });
+      this.mpCleanupFns = [];
+    });
+
+    if (this.mpIsHost) {
+      // ── HOST: handle action requests sent by the guest ───────────────────
+
+      const offPlace = this.mpRoom.on('place-tower', (msg: any) => {
+        const { col, row, type } = msg as { col: number; row: number; type: TowerType };
+        if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return;
+        if (PATH_SET.has(`${col},${row}`)) return;
+        if (this.grid[row][col] !== null) return;
+        const cfg = TOWER_CONFIGS[type];
+        if (!cfg || this.gold < cfg.cost) return;
+
+        this.gold -= cfg.cost;
+        this.grid[row][col] = type;
+        const tower = new Tower(this, type, col, row);
+        this.towers.push(tower);
+        tower.showRange(true);
+        this.time.delayedCall(1200, () => { if (tower) tower.showRange(false); });
+        this.emitStats();
+        this.syncHostState();
+      });
+
+      const offSell = this.mpRoom.on('sell-tower', (msg: any) => {
+        const { col, row } = msg as { col: number; row: number };
+        const tower = this.towers.find(t => t.col === col && t.row === row);
+        if (!tower) return;
+        const refund = Math.floor(TOWER_CONFIGS[tower.type].cost * 0.6);
+        this.spawnSellParticles(tower.x, tower.y);
+        this.showFloatingText(`+${refund}g`, tower.x, tower.y - 16, '#ffd700');
+        const idx = this.towers.indexOf(tower);
+        if (idx !== -1) this.towers.splice(idx, 1);
+        this.grid[tower.row][tower.col] = null;
+        this.gold += refund;
+        tower.destroy();
+        this.emitStats();
+        this.syncHostState();
+      });
+
+      const offStart = this.mpRoom.on('start-wave', (_msg: any) => {
+        this.startWave();
+      });
+
+      this.mpCleanupFns.push(offPlace, offSell, offStart);
+
+    } else {
+      // ── GUEST: receive state updates & events from host ──────────────────
+
+      // Full game-state snapshot (lives, gold, wave, towers)
+      const offState = this.mpRoom.on('state-sync', (msg: any) => {
+        this.lives   = msg.lives   ?? this.lives;
+        this.gold    = msg.gold    ?? this.gold;
+        this.waveNum = msg.waveNum ?? this.waveNum;
+        this.score   = msg.score   ?? this.score;
+        this.emitStats();
+
+        // Reconcile towers: add ones the host has that we don't
+        const incoming: Array<{ col: number; row: number; type: TowerType }> = msg.towers ?? [];
+        const incomingKeys = new Set(incoming.map(t => `${t.col},${t.row}`));
+
+        for (const td of incoming) {
+          const cell = this.grid[td.row]?.[td.col];
+          if (cell === null) {
+            // Cell is empty — place the tower the host put there
+            this.grid[td.row][td.col] = td.type;
+            const t = new Tower(this, td.type, td.col, td.row);
+            this.towers.push(t);
+          }
+        }
+
+        // Remove towers that the host has sold
+        const toRemove = this.towers.filter(t => !incomingKeys.has(`${t.col},${t.row}`));
+        for (const t of toRemove) {
+          this.spawnSellParticles(t.x, t.y);
+          this.grid[t.row][t.col] = null;
+          const idx = this.towers.indexOf(t);
+          if (idx !== -1) this.towers.splice(idx, 1);
+          t.destroy();
+        }
+
+        // Sync wave-active flag so start button visibility stays consistent
+        const hostWaveActive = msg.waveActive ?? this.waveActive;
+        if (!hostWaveActive && this.waveActive) {
+          // Host's wave ended — guest may have missed the wave-complete message
+          this.waveActive = false;
+          this.startBtn.setVisible(true);
+        }
+      });
+
+      // Per-frame enemy positions
+      const offEnemies = this.mpRoom.on('enemy-sync', (msg: any) => {
+        const snapshots: Array<{
+          id: number; type: EnemyType; x: number; y: number; hp: number; maxHp: number;
+        }> = msg.enemies ?? [];
+
+        const receivedIds = new Set(snapshots.map(s => s.id));
+
+        for (const snap of snapshots) {
+          if (this.guestEnemies.has(snap.id)) {
+            const e = this.guestEnemies.get(snap.id)!;
+            e.syncPosition(snap.x, snap.y);
+            e.syncHp(snap.hp, snap.maxHp);
+          } else {
+            // New enemy — create ghost at the reported position
+            const ghost = new Enemy(this, snap.type, WAYPOINTS, 1);
+            ghost.syncPosition(snap.x, snap.y);
+            ghost.syncHp(snap.hp, snap.maxHp);
+            this.guestEnemies.set(snap.id, ghost);
+          }
+        }
+
+        // Enemies that vanished from host's list → play death anim and remove
+        for (const [id, e] of this.guestEnemies) {
+          if (!receivedIds.has(id)) {
+            this.spawnDeathParticles(e.x, e.y, e.type);
+            e.triggerDeathAnimation();
+            this.guestEnemies.delete(id);
+          }
+        }
+      });
+
+      // Wave started
+      const offWaveStarted = this.mpRoom.on('wave-started', (msg: any) => {
+        this.waveNum = msg.waveNum ?? this.waveNum + 1;
+        this.waveActive = true;
+        this.startBtn.setVisible(false);
+        this.tweens.killTweensOf(this.startBtn);
+        this.emitStats();
+
+        const banner = this.add
+          .text(GAME_WIDTH / 2, 55, `⚔ Wave ${this.waveNum}!`, {
+            fontSize: '30px',
+            color: '#ff4444',
+            fontStyle: 'bold',
+            stroke: '#ffffff',
+            strokeThickness: 4,
+          })
+          .setOrigin(0.5)
+          .setDepth(20)
+          .setAlpha(0);
+
+        this.tweens.add({
+          targets: banner,
+          alpha: 1,
+          scaleX: 1.25,
+          scaleY: 1.25,
+          duration: 300,
+          yoyo: true,
+          hold: 350,
+          onComplete: () => banner.destroy(),
+        });
+      });
+
+      // Wave complete
+      const offWaveComplete = this.mpRoom.on('wave-complete', (msg: any) => {
+        this.waveActive = false;
+        const bonus: number = msg.bonus ?? 0;
+        this.waveNum = msg.waveNum ?? this.waveNum;
+        this.gold += bonus;
+        this.emitStats();
+
+        const lbl = this.startBtn.list[1] as Phaser.GameObjects.Text;
+        lbl.setText(`▶  Wave ${this.waveNum + 1} ready`);
+        this.startBtn.setVisible(true);
+        this.tweens.killTweensOf(this.startBtn);
+        this.tweens.add({
+          targets: this.startBtn,
+          scaleX: 1.05,
+          scaleY: 1.05,
+          duration: 750,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+
+        const clearMsg = this.add
+          .text(GAME_WIDTH / 2, PLAY_H / 2 - 40, `✨ Wave ${this.waveNum} Clear!\n+${bonus}g bonus`, {
+            fontSize: '26px',
+            color: '#ffd700',
+            fontStyle: 'bold',
+            align: 'center',
+            stroke: '#000000',
+            strokeThickness: 5,
+          })
+          .setOrigin(0.5)
+          .setDepth(20);
+
+        this.tweens.add({
+          targets: clearMsg,
+          y: PLAY_H / 2 - 90,
+          alpha: 0,
+          duration: 2000,
+          ease: 'Power2',
+          onComplete: () => clearMsg.destroy(),
+        });
+      });
+
+      // Game over
+      const offGameOver = this.mpRoom.on('game-over', (_msg: any) => {
+        this.triggerGameOver();
+      });
+
+      this.mpCleanupFns.push(
+        offState, offEnemies, offWaveStarted, offWaveComplete, offGameOver,
+      );
+    }
+  }
+
+  /** Send a full game-state snapshot to the guest (lives, gold, towers list). */
+  private syncHostState(): void {
+    if (!this.mpMode || !this.mpIsHost || !this.mpRoom) return;
+    try {
+      this.mpRoom.send('state-sync', {
+        lives:     this.lives,
+        gold:      this.gold,
+        waveNum:   this.waveNum,
+        score:     this.score,
+        waveActive: this.waveActive,
+        towers:    this.towers.map(t => ({ col: t.col, row: t.row, type: t.type })),
+      });
+    } catch {}
+  }
+
+  /** Send per-frame enemy positions/HP snapshot to the guest (~6 Hz). */
+  private syncEnemies(): void {
+    if (!this.mpMode || !this.mpIsHost || !this.mpRoom) return;
+    try {
+      this.mpRoom.send('enemy-sync', {
+        enemies: this.enemies
+          .filter(e => e.alive)
+          .map(e => ({
+            id:    e.id,
+            type:  e.type,
+            x:     Math.round(e.x),
+            y:     Math.round(e.y),
+            hp:    Math.round(e.hp),
+            maxHp: e.maxHp,
+          })),
+      });
+    } catch {}
+  }
 }
