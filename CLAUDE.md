@@ -18,7 +18,7 @@
   - 🪲 Bug — slow tank, 150 HP, 45 px/s, gives 25g (antennae, 6 legs, shell spots)
   - 🐦 Bird — fast fragile, 35 HP, 140 px/s, gives 15g (wings, crown, tail feathers)
 - **4 Tower Types** (detailed drawn cats on platforms):
-  - 🟠 Tabby Cat — 50g, balanced (DMG:15, RNG:125, 1.2/s), orange striped
+  - 🟠 Tabby Cat — 50g, balanced (DMG:10, RNG:125, 1.2/s), orange striped
   - ⚫ Ninja Cat — 100g, fast attacker (DMG:20, RNG:95, 2.8/s), red bandana, shuriken
   - 🟣 Wizard Cat — 150g, AoE (DMG:45+splash, RNG:155, 0.6/s), hat, wand, robe stars
   - 🟢 Sniper Cat — 125g, extreme range (DMG:80, RNG:260, 0.35/s), camo beret, rifle + scope
@@ -48,6 +48,9 @@ Entry (left, row 1) → right to col 3 → down to row 3 → right to col 7 → 
 - Tower shows range ring for 1.2 seconds after placement
 
 ## Changed This Turn
+- Tabby Cat damage reduced from 15 → 10
+
+## Previously Changed
 - **Multiplayer receive-side handlers complete** (`GameScene.ts`):
   - Implemented `setupMultiplayer()` — registers all `mpRoom.on()` listeners and stores unsubscribe fns in `mpCleanupFns`; all cleanup runs on scene `shutdown`
   - **Host receives from guest**: `place-tower` (validate, deduct gold, spawn Tower, syncHostState), `sell-tower` (validate, refund, destroy Tower, syncHostState), `start-wave` (calls `startWave()`)

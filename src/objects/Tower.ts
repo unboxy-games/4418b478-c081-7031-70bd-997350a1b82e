@@ -14,7 +14,7 @@ export interface TowerData {
 }
 
 export const TOWER_CONFIGS: Record<TowerType, TowerData> = {
-  tabby:  { cost: 50,  damage: 15, range: 125, fireRate: 1.2,  name: 'Tabby Cat',  description: 'Balanced | 50g',       color: 0xFF8C00 },
+  tabby:  { cost: 50,  damage: 10, range: 125, fireRate: 1.2,  name: 'Tabby Cat',  description: 'Balanced | 50g',       color: 0xFF8C00 },
   ninja:  { cost: 100, damage: 20, range: 95,  fireRate: 2.8,  name: 'Ninja Cat',  description: 'Fast | 100g',          color: 0x6644aa },
   wizard: { cost: 150, damage: 45, range: 155, fireRate: 0.6,  name: 'Wizard Cat', description: 'AoE | 150g',           color: 0x8E44AD },
   sniper: { cost: 125, damage: 80, range: 260, fireRate: 0.35, name: 'Sniper Cat', description: 'Extreme Range | 125g', color: 0x4a9a2a },
