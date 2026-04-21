@@ -38,6 +38,19 @@ export class GameScene extends Phaser.Scene {
 
   private divingEnemies: Phaser.Physics.Arcade.Sprite[] = [];
 
+  // ── Multiplayer ───────────────────────────
+  private mpRoom: any = null;
+  private isMultiplayer = false;
+  private posTimer      = 0;
+  private enemyById     = new Map<string, Phaser.Physics.Arcade.Sprite>();
+  private mpUnsubs: Array<() => void> = [];
+  private remotePlayers = new Map<string, {
+    sprite:  Phaser.Physics.Arcade.Sprite;
+    nameTag: Phaser.GameObjects.Text;
+    targetX: number;
+    targetY: number;
+  }>();
+
   constructor() {
     super({ key: 'GameScene' });
   }
@@ -58,6 +71,20 @@ export class GameScene extends Phaser.Scene {
     this.shootCooldown = 0;
     this.enemyShootTimer = 2000;
     this.diveTimer = 3500;
+
+    // ── Multiplayer init ──────────────────
+    this.remotePlayers.clear();
+    this.enemyById.clear();
+    this.mpUnsubs = [];
+    this.posTimer = 0;
+    const sceneData = (this.scene.settings.data ?? {}) as Record<string, unknown>;
+    if (sceneData.isMultiplayer && sceneData.room) {
+      this.isMultiplayer = true;
+      this.mpRoom = sceneData.room as any;
+    } else {
+      this.isMultiplayer = false;
+      this.mpRoom        = null;
+    }
 
     this.createBackground();
     this.generateTextures();
@@ -102,6 +129,10 @@ export class GameScene extends Phaser.Scene {
 
     // Load persisted high score — non-blocking, UI will update when ready
     this.loadHighScore();
+
+    // Multiplayer: subscribe to room events
+    if (this.isMultiplayer) this.setupMultiplayer();
+    this.events.once('shutdown', () => this.cleanupMultiplayer());
   }
 
   // ─────────────────────────────────────────
@@ -145,6 +176,145 @@ export class GameScene extends Phaser.Scene {
       this.highScore = saved;
       this.events.emit('highScore', this.highScore);
     }
+  }
+
+  // ─────────────────────────────────────────
+  //  Multiplayer methods
+  // ─────────────────────────────────────────
+
+  /** Generate 3 alternative-colour pilot ship textures (green / magenta / gold). */
+  private generateRemoteTextures(): void {
+    const ships = [
+      { key: 'player_r0', glow: 0x00ff88, hull: 0x22aa55, wings: 0x166633, hi: 0x88ffcc, ck: 0x44ff88 },
+      { key: 'player_r1', glow: 0xff44ff, hull: 0xaa22aa, wings: 0x771177, hi: 0xffaaff, ck: 0xff88ff },
+      { key: 'player_r2', glow: 0xffaa00, hull: 0xaa6600, wings: 0x774400, hi: 0xffdd88, ck: 0xffcc44 },
+    ];
+    for (const s of ships) {
+      if (this.textures.exists(s.key)) continue;
+      const g = this.make.graphics({ x: 0, y: 0 });
+      g.fillStyle(s.glow, 0.7);       g.fillEllipse(20, 50, 16, 8);
+      g.fillStyle(s.hull);            g.fillTriangle(20, 2, 4, 46, 36, 46);
+      g.fillStyle(s.wings);
+      g.fillTriangle(20, 22,  0, 50, 13, 35);
+      g.fillTriangle(20, 22, 40, 50, 27, 35);
+      g.fillStyle(s.hi);              g.fillTriangle(20, 5, 13, 28, 27, 28);
+      g.fillStyle(s.ck);              g.fillCircle(20, 20, 5);
+      g.fillStyle(0xffffff, 0.8);     g.fillCircle(19, 19, 2);
+      g.fillStyle(0xffff00);          g.fillRect(15, 44, 10, 6);
+      g.generateTexture(s.key, 40, 52);
+      g.destroy();
+    }
+  }
+
+  /** Register room-message listeners for the active multiplayer session. */
+  private setupMultiplayer(): void {
+    const room = this.mpRoom;
+
+    // Receive remote pilot positions
+    const offPos = room.on('pos', (data: { from: string; x: number; y: number }) => {
+      if (!data || data.from === room.sessionId) return;
+      const rp = this.remotePlayers.get(data.from);
+      if (rp) { rp.targetX = data.x; rp.targetY = data.y; }
+    });
+
+    // Receive enemy kills from other pilots
+    const offKill = room.on('kill', (data: { from: string; id: string }) => {
+      if (!data || data.from === room.sessionId) return;
+      this.applyRemoteKill(data.id);
+    });
+
+    // Sync player list (adds / removes remote pilot sprites)
+    const offState = room.onStateChange((state: any) => {
+      this.syncRemotePlayers(state);
+    });
+
+    // Room disconnection
+    room.onLeave(() => { this.isMultiplayer = false; });
+
+    this.mpUnsubs.push(offPos, offKill, offState);
+
+    // Initial render if state is already available
+    if (room.state) this.syncRemotePlayers(room.state);
+  }
+
+  /** Create/destroy remote pilot sprites based on current room state. */
+  private syncRemotePlayers(state: any): void {
+    const players = state?.players;
+    if (!players) return;
+
+    const entries: [string, any][] = players instanceof Map
+      ? [...(players as Map<string, any>).entries()]
+      : (Object.entries(players) as [string, any][]);
+
+    const validIds = new Set<string>();
+    let remoteIdx  = 0;
+
+    for (const [sessionId, pData] of entries) {
+      if (sessionId === this.mpRoom.sessionId) continue;
+      validIds.add(sessionId);
+
+      if (!this.remotePlayers.has(sessionId)) {
+        const key    = `player_r${remoteIdx % 3}`;
+        const sprite = this.physics.add.sprite(
+          Phaser.Math.Between(200, GAME_WIDTH - 200), GAME_HEIGHT - 60, key,
+        );
+        sprite.setCollideWorldBounds(true).setDepth(3).setAlpha(0.9);
+        this.tweens.add({
+          targets: sprite, y: sprite.y - 5,
+          duration: 1300, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+        });
+
+        const displayName = pData?.displayName ?? pData?.name ?? 'CO-PILOT';
+        const nameTag = this.add.text(sprite.x, sprite.y - 42, displayName, {
+          fontSize: '13px', color: '#88ffcc', fontFamily: 'monospace',
+          stroke: '#000000', strokeThickness: 2,
+        }).setOrigin(0.5).setDepth(10);
+
+        this.remotePlayers.set(sessionId, {
+          sprite, nameTag, targetX: sprite.x, targetY: GAME_HEIGHT - 60,
+        });
+      }
+      remoteIdx++;
+    }
+
+    // Remove pilots who left
+    for (const [sid, rp] of this.remotePlayers) {
+      if (!validIds.has(sid)) {
+        try { rp.sprite.destroy(); } catch {}
+        try { rp.nameTag.destroy(); } catch {}
+        this.remotePlayers.delete(sid);
+      }
+    }
+  }
+
+  /** Apply a kill that was broadcast by another player. */
+  private applyRemoteKill(id: string): void {
+    const enemy = this.enemyById.get(id);
+    if (!enemy?.active) return;
+
+    const type = enemy.getData('type') as number;
+    this.spawnExplosion(enemy.x, enemy.y, type);
+
+    const idx = this.divingEnemies.indexOf(enemy);
+    if (idx >= 0) this.divingEnemies.splice(idx, 1);
+
+    this.enemyById.delete(id);
+    enemy.destroy();
+
+    const alive = (this.enemyGroup.getChildren() as Phaser.Physics.Arcade.Sprite[])
+      .filter(e => e.active);
+    if (alive.length === 0) this.advanceLevel();
+  }
+
+  /** Unsubscribe all room listeners and destroy remote sprites. */
+  private cleanupMultiplayer(): void {
+    for (const unsub of this.mpUnsubs) { try { unsub(); } catch {} }
+    this.mpUnsubs = [];
+    this.remotePlayers.forEach(rp => {
+      try { rp.sprite?.destroy(); } catch {}
+      try { rp.nameTag?.destroy(); } catch {}
+    });
+    this.remotePlayers.clear();
   }
 
   private async saveHighScore(): Promise<void> {
@@ -198,6 +368,8 @@ export class GameScene extends Phaser.Scene {
   //  Texture generation (cached on first run)
   // ─────────────────────────────────────────
   private generateTextures(): void {
+    // Always ensure remote-pilot textures exist (needed when switching from solo → MP)
+    this.generateRemoteTextures();
     if (this.textures.exists('player')) return;
 
     // ── Player ship (40 × 52) ──────────────
@@ -337,6 +509,7 @@ export class GameScene extends Phaser.Scene {
   //  Formation
   // ─────────────────────────────────────────
   private populateFormation(): void {
+    this.enemyById.clear();
     this.enemyGroup.clear(true, true);
 
     for (let row = 0; row < ROWS; row++) {
@@ -352,6 +525,11 @@ export class GameScene extends Phaser.Scene {
         enemy.setData('homeY',   homeY);
         enemy.setData('isDiving',  false);
         enemy.setData('divePhase', 0);
+
+        // Stable ID for kill-sync across multiplayer clients
+        const eid = `${this.level}_${row}_${col}`;
+        enemy.setData('id', eid);
+        this.enemyById.set(eid, enemy);
 
         // Idle pulse
         this.tweens.add({
@@ -372,6 +550,23 @@ export class GameScene extends Phaser.Scene {
   // ─────────────────────────────────────────
   update(_time: number, delta: number): void {
     if (this.isGameOver) return;
+
+    // Multiplayer: sync local position + lerp remote pilots
+    if (this.isMultiplayer && this.mpRoom) {
+      this.posTimer += delta;
+      if (this.posTimer >= 50) {
+        this.posTimer = 0;
+        try {
+          this.mpRoom.send('pos', { from: this.mpRoom.sessionId, x: this.player.x, y: this.player.y });
+        } catch { /* room may be disconnected */ }
+      }
+      for (const rp of this.remotePlayers.values()) {
+        if (!rp.sprite.active) continue;
+        rp.sprite.x = Phaser.Math.Linear(rp.sprite.x, rp.targetX, 0.2);
+        rp.sprite.y = Phaser.Math.Linear(rp.sprite.y, rp.targetY, 0.2);
+        rp.nameTag.setPosition(rp.sprite.x, rp.sprite.y - 42);
+      }
+    }
 
     this.shootCooldown    -= delta;
     this.enemyShootTimer  -= delta;
@@ -559,8 +754,9 @@ export class GameScene extends Phaser.Scene {
     if (!bullet.active || !enemy.active) return;
 
     bullet.destroy();
-    const type = enemy.getData('type') as number;
-    const pts  = ENEMY_POINTS[type];
+    const type    = enemy.getData('type') as number;
+    const pts     = ENEMY_POINTS[type];
+    const enemyId = enemy.getData('id') as string;
 
     this.spawnExplosion(enemy.x, enemy.y, type);
     this.showPointPopup(enemy.x, enemy.y, pts);
@@ -568,6 +764,12 @@ export class GameScene extends Phaser.Scene {
     const idx = this.divingEnemies.indexOf(enemy);
     if (idx >= 0) this.divingEnemies.splice(idx, 1);
     enemy.destroy();
+    this.enemyById.delete(enemyId);
+
+    // Broadcast to co-op partners
+    if (this.isMultiplayer && this.mpRoom) {
+      try { this.mpRoom.send('kill', { from: this.mpRoom.sessionId, id: enemyId }); } catch {}
+    }
 
     this.score += pts;
     this.events.emit('score', pts);
@@ -811,40 +1013,43 @@ export class GameScene extends Phaser.Scene {
 
     const restartTxt = this.add.text(
       GAME_WIDTH / 2, GAME_HEIGHT / 2 + 108,
-      'Press  SPACE  to  play  again',
+      this.isMultiplayer ? 'SPACE  rematch  ·  ESC  leave' : 'Press  SPACE  to  play  again',
       { fontSize: '22px', color: '#99aaff' }
     ).setOrigin(0.5).setDepth(20);
 
-    this.tweens.add({
-      targets:  restartTxt,
-      alpha:    0.2,
-      duration: 700,
-      yoyo:     true,
-      repeat:   -1,
-    });
+    this.tweens.add({ targets: restartTxt, alpha: 0.2, duration: 700, yoyo: true, repeat: -1 });
 
-    const lbTxt = this.add.text(
-      GAME_WIDTH / 2, GAME_HEIGHT / 2 + 146,
-      'Press  L  for  Scoreboard',
-      { fontSize: '20px', color: '#4477cc' }
-    ).setOrigin(0.5).setDepth(20);
-
-    this.tweens.add({
-      targets:  lbTxt,
-      alpha:    0.25,
-      duration: 900,
-      yoyo:     true,
-      repeat:   -1,
-    });
+    if (!this.isMultiplayer) {
+      const lbTxt = this.add.text(
+        GAME_WIDTH / 2, GAME_HEIGHT / 2 + 146,
+        'Press  L  for  Scoreboard',
+        { fontSize: '20px', color: '#4477cc' }
+      ).setOrigin(0.5).setDepth(20);
+      this.tweens.add({ targets: lbTxt, alpha: 0.25, duration: 900, yoyo: true, repeat: -1 });
+    }
 
     this.time.delayedCall(1200, () => {
-      this.input.keyboard!.once('keydown-SPACE', () => {
-        this.scene.restart();
-      });
-      this.input.keyboard!.once('keydown-L', () => {
-        this.scene.stop('UIScene');
-        this.scene.start('LeaderboardScene', { score: this.score, wave: this.level });
-      });
+      if (this.isMultiplayer && this.mpRoom) {
+        // Multiplayer: SPACE = rematch with same room, ESC = leave
+        this.input.keyboard!.once('keydown-SPACE', () => {
+          this.scene.start('GameScene', { room: this.mpRoom, isMultiplayer: true });
+          this.scene.start('UIScene');
+        });
+        this.input.keyboard!.once('keydown-ESCAPE', () => {
+          try { this.mpRoom.leave(); } catch {}
+          this.mpRoom = null;
+          this.scene.stop('UIScene');
+          this.scene.start('StartScene');
+        });
+      } else {
+        this.input.keyboard!.once('keydown-SPACE', () => {
+          this.scene.restart();
+        });
+        this.input.keyboard!.once('keydown-L', () => {
+          this.scene.stop('UIScene');
+          this.scene.start('LeaderboardScene', { score: this.score, wave: this.level });
+        });
+      }
     });
   }
 }

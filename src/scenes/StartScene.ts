@@ -13,13 +13,22 @@ export class StartScene extends Phaser.Scene {
     this.createPrompt();
     this.createControls();
 
-    // Space to start
+    // Space to start solo
     const spaceKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     spaceKey.once('down', () => {
       this.cameras.main.fadeOut(400, 0, 0, 0);
       this.cameras.main.once('camerafadeoutcomplete', () => {
         this.scene.start('GameScene');
         this.scene.start('UIScene');
+      });
+    });
+
+    // M to enter co-op lobby
+    const mKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.M);
+    mKey.once('down', () => {
+      this.cameras.main.fadeOut(400, 0, 0, 0);
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        this.scene.start('LobbyScene');
       });
     });
 
@@ -193,7 +202,7 @@ export class StartScene extends Phaser.Scene {
 
   // ── Press Space prompt ──────────────────────────────────────────────────
   private createPrompt(): void {
-    const prompt = this.add.text(GAME_WIDTH / 2, 470, 'PRESS SPACE TO START', {
+    const prompt = this.add.text(GAME_WIDTH / 2, 460, 'PRESS SPACE TO START', {
       fontFamily: 'monospace',
       fontSize: '32px',
       color: '#ffffff',
@@ -201,7 +210,6 @@ export class StartScene extends Phaser.Scene {
       strokeThickness: 4,
     }).setOrigin(0.5).setDepth(10);
 
-    // Blink
     this.tweens.add({
       targets: prompt,
       alpha: 0,
@@ -209,6 +217,25 @@ export class StartScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
       yoyo: true,
       loop: -1,
+    });
+
+    // Co-op option
+    const mpPrompt = this.add.text(GAME_WIDTH / 2, 504, 'PRESS  M  FOR  CO-OP  MULTIPLAYER', {
+      fontFamily: 'monospace',
+      fontSize: '18px',
+      color: '#44ff88',
+      stroke: '#002200',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(10);
+
+    this.tweens.add({
+      targets: mpPrompt,
+      alpha: 0.2,
+      duration: 850,
+      ease: 'Sine.easeInOut',
+      yoyo: true,
+      loop: -1,
+      delay: 300,
     });
   }
 

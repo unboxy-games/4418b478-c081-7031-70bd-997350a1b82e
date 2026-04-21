@@ -1,6 +1,7 @@
 import { createUnboxyGame, Unboxy } from '@unboxy/phaser-sdk';
 import { BootScene } from './scenes/BootScene';
 import { StartScene } from './scenes/StartScene';
+import { LobbyScene } from './scenes/LobbyScene';
 import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
 import { LeaderboardScene } from './scenes/LeaderboardScene';
@@ -14,5 +15,5 @@ export const unboxyReady = Unboxy.init({ standaloneGameId: 'galaxian-clone' })
 createUnboxyGame({
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
-  scenes: [BootScene, StartScene, GameScene, UIScene, LeaderboardScene],
+  scenes: [BootScene, StartScene, LobbyScene, GameScene, UIScene, LeaderboardScene],
 });
