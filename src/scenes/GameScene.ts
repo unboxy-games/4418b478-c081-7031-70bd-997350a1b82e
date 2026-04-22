@@ -38,6 +38,12 @@ export class GameScene extends Phaser.Scene {
 
   private divingEnemies: Phaser.Physics.Arcade.Sprite[] = [];
 
+  // ── Touch controls ────────────────────────
+  private touchLeft  = false;
+  private touchRight = false;
+  private touchFire  = false;
+  private touchControlObjects: Phaser.GameObjects.GameObject[] = [];
+
   // ── Multiplayer ───────────────────────────
   private mpRoom: any = null;
   private isMultiplayer = false;
@@ -86,6 +92,11 @@ export class GameScene extends Phaser.Scene {
       this.mpRoom        = null;
     }
 
+    this.touchLeft  = false;
+    this.touchRight = false;
+    this.touchFire  = false;
+    this.touchControlObjects = [];
+
     this.createBackground();
     this.generateTextures();
 
@@ -102,6 +113,8 @@ export class GameScene extends Phaser.Scene {
     this.fireKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.leftKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A);
     this.rightKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+
+    this.createTouchControls();
 
     // Collisions
     this.physics.add.overlap(
@@ -501,6 +514,88 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────
+  //  Touch controls (virtual gamepad)
+  // ─────────────────────────────────────────
+  private createTouchControls(): void {
+    const btnY  = GAME_HEIGHT - 46;
+    const btnW  = 100;
+    const btnH  = 68;
+    const r     = 14;
+
+    const makeBtn = (
+      cx: number, cy: number,
+      label: string, subLabel: string,
+      color: number,
+      onDown: () => void,
+      onUp:   () => void,
+    ): void => {
+      // Background panel
+      const g = this.add.graphics().setDepth(11);
+      g.fillStyle(color, 0.22);
+      g.fillRoundedRect(cx - btnW / 2, cy - btnH / 2, btnW, btnH, r);
+      g.lineStyle(2, color, 0.55);
+      g.strokeRoundedRect(cx - btnW / 2, cy - btnH / 2, btnW, btnH, r);
+
+      // Main label (arrow / icon)
+      const main = this.add.text(cx, cy - 6, label, {
+        fontSize:        '30px',
+        color:           '#ffffff',
+        fontFamily:      'monospace',
+        fontStyle:       'bold',
+        stroke:          '#000000',
+        strokeThickness: 3,
+      }).setOrigin(0.5).setDepth(12).setAlpha(0.9);
+
+      // Sub label
+      const sub = this.add.text(cx, cy + 18, subLabel, {
+        fontSize:   '11px',
+        color:      '#aabbcc',
+        fontFamily: 'monospace',
+      }).setOrigin(0.5).setDepth(12);
+
+      // Invisible interactive zone (full button area)
+      const zone = this.add.zone(cx, cy, btnW, btnH)
+        .setInteractive()
+        .setDepth(13);
+      zone.on('pointerdown',    onDown);
+      zone.on('pointerup',      onUp);
+      zone.on('pointerout',     onUp);
+      zone.on('pointerupoutside', onUp);
+
+      this.touchControlObjects.push(g, main, sub, zone);
+    };
+
+    // LEFT
+    makeBtn(90, btnY, '◀', 'LEFT', 0x4488ff,
+      () => { this.touchLeft = true;  },
+      () => { this.touchLeft = false; },
+    );
+
+    // RIGHT
+    makeBtn(210, btnY, '▶', 'RIGHT', 0x4488ff,
+      () => { this.touchRight = true;  },
+      () => { this.touchRight = false; },
+    );
+
+    // FIRE
+    makeBtn(GAME_WIDTH - 90, btnY, '▲', 'FIRE', 0xff5500,
+      () => { this.touchFire = true;  },
+      () => { this.touchFire = false; },
+    );
+  }
+
+  /** Hide touch controls (used on game over so tap restarts the game). */
+  private hideTouchControls(): void {
+    for (const obj of this.touchControlObjects) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      try { (obj as any).setVisible(false); } catch {}
+    }
+    this.touchLeft  = false;
+    this.touchRight = false;
+    this.touchFire  = false;
+  }
+
+  // ─────────────────────────────────────────
   //  Formation
   // ─────────────────────────────────────────
   private populateFormation(): void {
@@ -584,10 +679,12 @@ export class GameScene extends Phaser.Scene {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     body.setVelocityX(0);
 
-    if (this.cursors.left.isDown  || this.leftKey.isDown)  body.setVelocityX(-320);
-    if (this.cursors.right.isDown || this.rightKey.isDown) body.setVelocityX(320);
+    if (this.cursors.left.isDown  || this.leftKey.isDown  || this.touchLeft)  body.setVelocityX(-320);
+    if (this.cursors.right.isDown || this.rightKey.isDown || this.touchRight) body.setVelocityX(320);
 
-    if (Phaser.Input.Keyboard.JustDown(this.fireKey) && this.shootCooldown <= 0) {
+    // Keyboard fires on JustDown; touch button fires continuously (limited by cooldown)
+    const kbFire = Phaser.Input.Keyboard.JustDown(this.fireKey);
+    if ((kbFire || this.touchFire) && this.shootCooldown <= 0) {
       const bullet = this.playerBullets.create(
         this.player.x, this.player.y - 28, 'pbullet'
       ) as Phaser.Physics.Arcade.Sprite;
@@ -940,6 +1037,7 @@ export class GameScene extends Phaser.Scene {
   // ─────────────────────────────────────────
   private showGameOver(): void {
     this.isGameOver = true;
+    this.hideTouchControls();
 
     // Determine if this run set a new high score BEFORE we potentially overwrite
     const isNewBest = this.score > 0 && this.score >= this.highScore;
@@ -1036,6 +1134,11 @@ export class GameScene extends Phaser.Scene {
           this.scene.stop('UIScene');
           this.scene.start('StartScene');
         });
+        // Touch: tap to rematch
+        this.input.once('pointerdown', () => {
+          this.scene.start('GameScene', { room: this.mpRoom, isMultiplayer: true });
+          this.scene.start('UIScene');
+        });
       } else {
         this.input.keyboard!.once('keydown-SPACE', () => {
           this.scene.restart();
@@ -1043,6 +1146,10 @@ export class GameScene extends Phaser.Scene {
         this.input.keyboard!.once('keydown-L', () => {
           this.scene.stop('UIScene');
           this.scene.start('LeaderboardScene', { score: this.score, wave: this.level });
+        });
+        // Touch: tap anywhere to restart
+        this.input.once('pointerdown', () => {
+          this.scene.restart();
         });
       }
     });

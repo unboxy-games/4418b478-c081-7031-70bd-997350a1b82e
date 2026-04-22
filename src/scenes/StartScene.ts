@@ -14,14 +14,19 @@ export class StartScene extends Phaser.Scene {
     this.createControls();
 
     // Space to start solo
-    const spaceKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-    spaceKey.once('down', () => {
+    const startGame = () => {
       this.cameras.main.fadeOut(400, 0, 0, 0);
       this.cameras.main.once('camerafadeoutcomplete', () => {
         this.scene.start('GameScene');
         this.scene.start('UIScene');
       });
-    });
+    };
+
+    const spaceKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    spaceKey.once('down', startGame);
+
+    // Tap anywhere to start (touch screens)
+    this.input.once('pointerdown', startGame);
 
     // M to enter co-op lobby
     const mKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.M);
@@ -202,7 +207,7 @@ export class StartScene extends Phaser.Scene {
 
   // ── Press Space prompt ──────────────────────────────────────────────────
   private createPrompt(): void {
-    const prompt = this.add.text(GAME_WIDTH / 2, 460, 'PRESS SPACE TO START', {
+    const prompt = this.add.text(GAME_WIDTH / 2, 460, 'PRESS SPACE  or  TAP  TO START', {
       fontFamily: 'monospace',
       fontSize: '32px',
       color: '#ffffff',

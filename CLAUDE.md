@@ -25,7 +25,8 @@
   - Score popup text flies upward on kill
   - Wave banner scales up & fades on level transition
   - UI: score bounces on update; life icons = mini ship graphics
-- **Start screen**: Title screen with matching starfield, animated enemy rows, blinking "PRESS SPACE TO START", controls & score table; fades in/out on transition
+- **Start screen**: Title screen with matching starfield, animated enemy rows, blinking "PRESS SPACE or TAP TO START", controls & score table; fades in/out on transition
+- **Touch / tablet controls**: Three virtual buttons drawn in the bottom strip of the screen (◀ LEFT, ▶ RIGHT, ▲ FIRE); semi-transparent, depth 11–13; interact via Phaser Zone pointerdown/up/out; hidden on game over; touch also fires tap-to-start (StartScene) and tap-to-restart (game-over screen)
 - **Persistent high score**: Saved via `unboxy.saves` (key `highScore`) on game over; loaded on scene start; HUD shows golden "HI  N" beneath SCORE; bounces on update; "★ NEW BEST ★" pulsing callout shown on game-over screen when record broken
 - **Global scoreboard**: Top-10 all-player leaderboard via `unboxy.gameData` (key `leaderboard`); displayed in `LeaderboardScene`; scores submitted on game over for authenticated players; accessible via L key on game-over screen; SPACE restarts / ESC returns to menu
 
@@ -48,16 +49,19 @@
 - Current player's entry is highlighted in the scoreboard (matched by score + wave)
 
 ## Controls
-| Key | Action |
-|-----|--------|
-| ← / A | Move player left |
-| → / D | Move player right |
-| Space | Fire / Restart (game over) / Play again (scoreboard) |
+| Key / Touch | Action |
+|-------------|--------|
+| ← / A / ◀ button | Move player left |
+| → / D / ▶ button | Move player right |
+| Space / ▲ button | Fire |
+| Tap anywhere (game over) | Restart |
+| Tap anywhere (start screen) | Start game |
 | L | Open Scoreboard (game over screen) |
 | ESC | Return to Main Menu (scoreboard) |
 
 ## This Turn
-- Added `LeaderboardScene` — themed top-10 global scoreboard with panel, medal highlights, and current-player row highlight
-- Added `submitLeaderboardScore()` to `GameScene` — submits score+wave+name to `gameData` on game over (authenticated users only, retry on VERSION_MISMATCH)
-- Added "Press L for Scoreboard" prompt on game-over screen
-- Registered `LeaderboardScene` in Phaser config (`main.ts`)
+- Added virtual touch buttons (◀ LEFT, ▶ RIGHT, ▲ FIRE) to GameScene via `createTouchControls()`
+- Buttons are semi-transparent rounded panels in the bottom strip (depth 11–13), always visible
+- Left/Right set velocity flags; Fire fires continuously while held (respecting cooldown)
+- Buttons hidden on game over via `hideTouchControls()`; tap-to-restart added on game-over screen
+- StartScene: tap anywhere to start (alongside Space key); prompt updated to mention tap
