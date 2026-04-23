@@ -26,7 +26,7 @@
   - Wave banner scales up & fades on level transition
   - UI: score bounces on update; life icons = mini ship graphics
 - **Start screen**: Title screen with matching starfield, animated enemy rows, blinking "PRESS SPACE or TAP TO START", controls & score table; fades in/out on transition
-- **Touch / tablet controls**: Three virtual buttons drawn in the bottom strip of the screen (◀ LEFT, ▶ RIGHT, ▲ FIRE); semi-transparent, depth 11–13; interact via Phaser Zone pointerdown/up/out; hidden on game over; touch also fires tap-to-start (StartScene) and tap-to-restart (game-over screen)
+- **Touch / tablet controls**: Virtual joystick (bottom-left, radius 60, `phaser3-rex-plugins` VirtualJoystickPlugin, `4dir` mode) for left/right movement; circular FIRE button (bottom-right, radius 72) via Phaser Zone; both hidden on game over; tap-to-start and tap-to-restart still work; keyboard controls unchanged
 - **Persistent high score**: Saved via `unboxy.saves` (key `highScore`) on game over; loaded on scene start; HUD shows golden "HI  N" beneath SCORE; bounces on update; "★ NEW BEST ★" pulsing callout shown on game-over screen when record broken
 - **Global scoreboard**: Top-10 all-player leaderboard via `unboxy.gameData` (key `leaderboard`); displayed in `LeaderboardScene`; scores submitted on game over for authenticated players; accessible via L key on game-over screen; SPACE restarts / ESC returns to menu
 
@@ -51,13 +51,18 @@
 ## Controls
 | Key / Touch | Action |
 |-------------|--------|
-| ← / A / ◀ button | Move player left |
-| → / D / ▶ button | Move player right |
-| Space / ▲ button | Fire |
+| ← / A | Move player left |
+| → / D | Move player right |
+| Space | Fire |
+| Virtual joystick (bottom-left) | Move left / right on touch |
+| FIRE button (bottom-right circle) | Fire on touch |
 | Tap anywhere (game over) | Restart |
 | Tap anywhere (start screen) | Start game |
 | L | Open Scoreboard (game over screen) |
 | ESC | Return to Main Menu (scoreboard) |
 
+## Dependencies
+- `phaser3-rex-plugins` — VirtualJoystickPlugin registered as global plugin `rexVirtualJoystick` in `main.ts`
+
 ## This Turn
-- Changed starting player lives to 2
+- Reduced virtual joystick radius from 80 to 60 (smaller touch target)

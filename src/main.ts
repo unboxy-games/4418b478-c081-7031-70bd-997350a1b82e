@@ -1,4 +1,5 @@
 import { createUnboxyGame, Unboxy } from '@unboxy/phaser-sdk';
+import VirtualJoystickPlugin from 'phaser3-rex-plugins/plugins/virtualjoystick-plugin.js';
 import { BootScene } from './scenes/BootScene';
 import { StartScene } from './scenes/StartScene';
 import { LobbyScene } from './scenes/LobbyScene';
@@ -16,4 +17,9 @@ createUnboxyGame({
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
   scenes: [BootScene, StartScene, LobbyScene, GameScene, UIScene, LeaderboardScene],
+  plugins: {
+    global: [
+      { key: 'rexVirtualJoystick', plugin: VirtualJoystickPlugin, start: true },
+    ],
+  },
 });

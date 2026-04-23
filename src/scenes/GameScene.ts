@@ -39,8 +39,8 @@ export class GameScene extends Phaser.Scene {
   private divingEnemies: Phaser.Physics.Arcade.Sprite[] = [];
 
   // ── Touch controls ────────────────────────
-  private touchLeft  = false;
-  private touchRight = false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private joystick: any = null;
   private touchFire  = false;
   private touchControlObjects: Phaser.GameObjects.GameObject[] = [];
 
@@ -92,8 +92,7 @@ export class GameScene extends Phaser.Scene {
       this.mpRoom        = null;
     }
 
-    this.touchLeft  = false;
-    this.touchRight = false;
+    this.joystick = null;
     this.touchFire  = false;
     this.touchControlObjects = [];
 
@@ -514,74 +513,60 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ─────────────────────────────────────────
-  //  Touch controls (virtual gamepad)
+  //  Touch controls (virtual joystick + fire)
   // ─────────────────────────────────────────
   private createTouchControls(): void {
-    const btnY  = GAME_HEIGHT - 46;
-    const btnW  = 100;
-    const btnH  = 68;
-    const r     = 14;
+    // ── Virtual joystick (left side) ────────
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const plugin = this.plugins.get('rexVirtualJoystick') as any;
+    if (plugin) {
+      this.joystick = plugin.add(this, {
+        x:        160,
+        y:        GAME_HEIGHT - 110,
+        radius:   60,
+        dir:      '4dir',
+        forceMin: 12,
+      });
+    }
 
-    const makeBtn = (
-      cx: number, cy: number,
-      label: string, subLabel: string,
-      color: number,
-      onDown: () => void,
-      onUp:   () => void,
-    ): void => {
-      // Background panel
-      const g = this.add.graphics().setDepth(11);
-      g.fillStyle(color, 0.22);
-      g.fillRoundedRect(cx - btnW / 2, cy - btnH / 2, btnW, btnH, r);
-      g.lineStyle(2, color, 0.55);
-      g.strokeRoundedRect(cx - btnW / 2, cy - btnH / 2, btnW, btnH, r);
+    // ── FIRE button (right side — circular) ─
+    const cx = GAME_WIDTH - 120;
+    const cy = GAME_HEIGHT - 110;
+    const r  = 72;
 
-      // Main label (arrow / icon)
-      const main = this.add.text(cx, cy - 6, label, {
-        fontSize:        '30px',
-        color:           '#ffffff',
-        fontFamily:      'monospace',
-        fontStyle:       'bold',
-        stroke:          '#000000',
-        strokeThickness: 3,
-      }).setOrigin(0.5).setDepth(12).setAlpha(0.9);
+    const fireGfx = this.add.graphics().setDepth(11);
+    fireGfx.fillStyle(0xff5500, 0.22);
+    fireGfx.fillCircle(cx, cy, r);
+    fireGfx.lineStyle(2, 0xff5500, 0.6);
+    fireGfx.strokeCircle(cx, cy, r);
+    // inner ring accent
+    fireGfx.lineStyle(1, 0xff8844, 0.3);
+    fireGfx.strokeCircle(cx, cy, r * 0.65);
 
-      // Sub label
-      const sub = this.add.text(cx, cy + 18, subLabel, {
-        fontSize:   '11px',
-        color:      '#aabbcc',
-        fontFamily: 'monospace',
-      }).setOrigin(0.5).setDepth(12);
+    const fireLbl = this.add.text(cx, cy - 10, '▲', {
+      fontSize:        '38px',
+      color:           '#ff8855',
+      fontFamily:      'monospace',
+      fontStyle:       'bold',
+      stroke:          '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(12).setAlpha(0.9);
 
-      // Invisible interactive zone (full button area)
-      const zone = this.add.zone(cx, cy, btnW, btnH)
-        .setInteractive()
-        .setDepth(13);
-      zone.on('pointerdown',    onDown);
-      zone.on('pointerup',      onUp);
-      zone.on('pointerout',     onUp);
-      zone.on('pointerupoutside', onUp);
+    const fireSub = this.add.text(cx, cy + 24, 'FIRE', {
+      fontSize:   '12px',
+      color:      '#cc8866',
+      fontFamily: 'monospace',
+    }).setOrigin(0.5).setDepth(12);
 
-      this.touchControlObjects.push(g, main, sub, zone);
-    };
+    const fireZone = this.add.zone(cx, cy, r * 2, r * 2)
+      .setInteractive()
+      .setDepth(13);
+    fireZone.on('pointerdown',      () => { this.touchFire = true;  });
+    fireZone.on('pointerup',        () => { this.touchFire = false; });
+    fireZone.on('pointerout',       () => { this.touchFire = false; });
+    fireZone.on('pointerupoutside', () => { this.touchFire = false; });
 
-    // LEFT
-    makeBtn(90, btnY, '◀', 'LEFT', 0x4488ff,
-      () => { this.touchLeft = true;  },
-      () => { this.touchLeft = false; },
-    );
-
-    // RIGHT
-    makeBtn(210, btnY, '▶', 'RIGHT', 0x4488ff,
-      () => { this.touchRight = true;  },
-      () => { this.touchRight = false; },
-    );
-
-    // FIRE
-    makeBtn(GAME_WIDTH - 90, btnY, '▲', 'FIRE', 0xff5500,
-      () => { this.touchFire = true;  },
-      () => { this.touchFire = false; },
-    );
+    this.touchControlObjects.push(fireGfx, fireLbl, fireSub, fireZone);
   }
 
   /** Hide touch controls (used on game over so tap restarts the game). */
@@ -590,9 +575,10 @@ export class GameScene extends Phaser.Scene {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       try { (obj as any).setVisible(false); } catch {}
     }
-    this.touchLeft  = false;
-    this.touchRight = false;
-    this.touchFire  = false;
+    if (this.joystick) {
+      try { this.joystick.setVisible(false); } catch {}
+    }
+    this.touchFire = false;
   }
 
   // ─────────────────────────────────────────
@@ -679,8 +665,10 @@ export class GameScene extends Phaser.Scene {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     body.setVelocityX(0);
 
-    if (this.cursors.left.isDown  || this.leftKey.isDown  || this.touchLeft)  body.setVelocityX(-320);
-    if (this.cursors.right.isDown || this.rightKey.isDown || this.touchRight) body.setVelocityX(320);
+    const jsLeft  = (this.joystick?.left  as boolean | undefined) ?? false;
+    const jsRight = (this.joystick?.right as boolean | undefined) ?? false;
+    if (this.cursors.left.isDown  || this.leftKey.isDown  || jsLeft)  body.setVelocityX(-320);
+    if (this.cursors.right.isDown || this.rightKey.isDown || jsRight) body.setVelocityX(320);
 
     // Keyboard fires on JustDown; touch button fires continuously (limited by cooldown)
     const kbFire = Phaser.Input.Keyboard.JustDown(this.fireKey);
