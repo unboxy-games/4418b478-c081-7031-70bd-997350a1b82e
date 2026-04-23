@@ -76,10 +76,16 @@
 - **SPACE** / **UP arrow** / **click** / **tap** — jump (only when grounded)
 - **ESC** — toggle pause (solo only)
 
+## rexUI Plugin
+- `phaser3-rex-plugins` added as a dependency
+- `UIPlugin` registered as a scene plugin (`mapping: 'rexUI'`) in main.ts
+- `rexUI!: any` declared on GameScene
+
 ## What Changed This Turn
-- Changed high score metric from "fewest attempts" to **"highest % reached"** (0–100), tracked per run via `currentRunMaxPct`
-- Score now saved on **death** (if new best %) not just on win — every player gets a score regardless of completion
-- Death/restart screen now shows "Reached X%" for current run + "🏆 New Best: X%!" or "Best: X%"
-- Win screen shows "🏆 First Clear! New Best: 100%!" or "Level already cleared"
-- Global leaderboard now sorts descending (higher % = better rank); score shown as "X%" in the panel
-- Leaderboard column header updated from "Attempts" to "Best %"
+- Replaced the hand-rolled death overlay in `showRestartPrompt` with a `rexUI.add.confirmDialog`
+- Dialog title: "YOU DIED" (red, bold); content: "You scored X%", attempt number, personal-best line
+- Two buttons: **"▶ Play Again"** (blue) → restarts the run; **"Main Menu"** (dark) → goes to MenuScene
+- Modal blocks all background input while the dialog is open
+- Bounce-in tween (Back.Out, scale 0.6 → 1) animates the dialog on entry
+- Gold sparkle particle burst still fires for new personal bests
+- `waitingForRestart` is no longer set in the solo death path (dialog buttons own those actions)

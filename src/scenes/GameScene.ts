@@ -39,6 +39,8 @@ const LEVEL: [number, OType, number][] = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 export class GameScene extends Phaser.Scene {
+  rexUI!: any; // mapped by UIPlugin scene plugin
+
   private player!:       Phaser.Physics.Arcade.Image;
   private groundStatic!: Phaser.GameObjects.Rectangle;
   private obstacles!:    Phaser.Physics.Arcade.StaticGroup;  // spikes → lethal on any touch
@@ -902,98 +904,101 @@ export class GameScene extends Phaser.Scene {
   }
 
   private showRestartPrompt(isNewBest: boolean = false): void {
-    // Semi-transparent dark overlay (camera-fixed)
-    const overlay = this.add
-      .rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.6)
-      .setScrollFactor(0).setDepth(28).setAlpha(0);
+    const cam        = this.cameras.main;
+    const cx         = cam.scrollX + GAME_WIDTH / 2;
+    const cy         = cam.scrollY + GAME_HEIGHT / 2;
+    const attemptNum = this.game.registry.get('attempt') as number;
 
-    // "YOU DIED" header
-    const deathTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 72, 'YOU DIED', {
-      fontSize: '60px', color: '#ff3333', fontStyle: 'bold',
-      fontFamily: 'Arial', stroke: '#000000', strokeThickness: 7,
-    }).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0).setScale(0.4);
+    // Gold sparkle burst when a new personal best is reached
+    if (isNewBest) {
+      const fx = this.add.particles(cx, cy - 30, 'pixel', {
+        speed: { min: 50, max: 170 }, angle: { min: 0, max: 360 },
+        scale: { start: 1.6, end: 0 }, alpha: { start: 1, end: 0 },
+        lifespan: 750, tint: [0xffd700, 0xffee44, 0xffcc00],
+        quantity: 0, emitting: false,
+      }).setDepth(55);
+      this.time.delayedCall(120, () => fx.explode(16));
+      this.time.delayedCall(1000, () => fx.destroy());
+    }
 
-    // "Reached X%" this run
-    const reachTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 8,
-      `Reached  ${this.currentRunMaxPct}%`, {
-        fontSize: '22px', color: '#aabbdd',
-        fontFamily: 'Arial', stroke: '#000022', strokeThickness: 4,
-      }
-    ).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0);
-
-    // Personal best line
-    const bestMsg = isNewBest
-      ? `🏆 New Best: ${this.personalBest}%!`
+    // Build the content string
+    const bestLine = isNewBest
+      ? `🏆  New Best: ${this.personalBest}%!`
       : this.personalBest > 0
         ? `Best: ${this.personalBest}%`
         : '';
-    const bestTxt = bestMsg
-      ? this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 30, bestMsg, {
-          fontSize: '20px',
-          color: isNewBest ? '#ffd700' : '#7799cc',
-          fontFamily: 'Arial',
-          fontStyle: isNewBest ? 'bold' : 'normal',
-          stroke: '#000022', strokeThickness: 3,
-        }).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0)
-      : null;
+    const contentLines = [
+      `You scored  ${this.currentRunMaxPct}%`,
+      `Attempt  ${attemptNum - 1}`,
+      ...(bestLine ? [bestLine] : []),
+    ];
 
-    // Attempt counter
-    const attemptNum = this.game.registry.get('attempt') as number;
-    const attemptLbl = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + (bestMsg ? 62 : 38),
-      `Attempt ${attemptNum - 1}`, {
-        fontSize: '18px', color: '#667788',
-        fontFamily: 'Arial', stroke: '#000022', strokeThickness: 3,
-      }
-    ).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0);
+    const dialog = this.rexUI.add.confirmDialog({
+      x: cx,
+      y: cy,
+      width: 440,
 
-    // "Tap or click to restart" prompt
-    const restartTxt = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2 + (bestMsg ? 100 : 76),
-      'Tap  /  Click  to  Restart', {
-        fontSize: '26px', color: '#ffffff',
-        fontFamily: 'Arial', stroke: '#000033', strokeThickness: 4,
-      }
-    ).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0);
+      background: { color: 0x080814, strokeColor: 0x3355aa, strokeLineWidth: 2, radius: 16 },
 
-    // Fade in overlay
-    this.tweens.add({ targets: overlay, alpha: 1, duration: 350 });
+      title: {
+        space: { left: 18, right: 18, top: 14, bottom: 14 },
+        background: { color: 0x1a0000, radius: { tl: 16, tr: 16, bl: 0, br: 0 } },
+        text: {
+          fontSize: '44px', color: '#ff3333', fontStyle: 'bold',
+          fontFamily: 'Arial', stroke: '#000000', strokeThickness: 6,
+        },
+      },
 
-    // Bounce in "YOU DIED"
-    this.tweens.add({ targets: deathTxt, alpha: 1, scale: 1, ease: 'Back.Out', duration: 550 });
+      content: {
+        space: { left: 24, right: 24, top: 20, bottom: 8 },
+        text: {
+          fontSize: '20px', color: '#aabbdd',
+          fontFamily: 'Arial', align: 'center',
+        },
+      },
 
-    // Slide + fade in sub-labels
-    this.tweens.add({ targets: reachTxt,  alpha: 1, delay: 350, duration: 400 });
-    if (bestTxt) {
-      this.tweens.add({ targets: bestTxt, alpha: 1, delay: 480, duration: 400 });
-      if (isNewBest) {
-        this.tweens.add({
-          targets: bestTxt, scaleX: 1.08, scaleY: 1.08,
-          yoyo: true, repeat: -1, duration: 550, delay: 900, ease: 'Sine.easeInOut',
-        });
-        // Gold sparkle burst for new best
-        const fx = this.add.particles(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 30, 'pixel', {
-          speed: { min: 40, max: 160 }, angle: { min: 0, max: 360 },
-          scale: { start: 1.5, end: 0 }, alpha: { start: 1, end: 0 },
-          lifespan: 700, tint: [0xffd700, 0xffee44, 0xffcc00],
-          quantity: 0, emitting: false,
-        }).setScrollFactor(0).setDepth(31);
-        this.time.delayedCall(580, () => fx.explode(12));
-        this.time.delayedCall(1400, () => fx.destroy());
-      }
-    }
-    this.tweens.add({ targets: attemptLbl,  alpha: 1, delay: 560, duration: 350 });
-    this.tweens.add({ targets: restartTxt,  alpha: 1, delay: 680, duration: 400 });
+      buttonA: {
+        space: { left: 22, right: 22, top: 12, bottom: 12 },
+        background: { color: 0x1a55ee, strokeColor: 0x4488ff, strokeLineWidth: 1, radius: 8 },
+        text: { fontSize: '20px', color: '#ffffff', fontStyle: 'bold', fontFamily: 'Arial' },
+      },
 
-    // Pulse the restart label
-    this.tweens.add({
-      targets: restartTxt, alpha: 0.25,
-      yoyo: true, repeat: -1,
-      duration: 650, delay: 1200,
-      ease: 'Sine.easeInOut',
+      buttonB: {
+        space: { left: 22, right: 22, top: 12, bottom: 12 },
+        background: { color: 0x1e1e30, strokeColor: 0x445577, strokeLineWidth: 1, radius: 8 },
+        text: { fontSize: '20px', color: '#8899bb', fontFamily: 'Arial' },
+      },
+
+      space: { title: 14, content: 14, action: 18, left: 18, right: 18, top: 18, bottom: 18 },
+      align: { actions: 'center' },
+      expand:  { content: false },
     });
 
-    // Allow restart input — delayed slightly to prevent the death-tap from
-    // immediately triggering a restart
-    this.time.delayedCall(500, () => { this.waitingForRestart = true; });
+    dialog.resetDisplayContent({
+      title:   'YOU DIED',
+      content: contentLines.join('\n'),
+      buttonA: '▶  Play Again',
+      buttonB: 'Main Menu',
+    });
+
+    dialog
+      .setDepth(50)
+      .setAlpha(0)
+      .layout();
+
+    // Bounce-in tween on the whole dialog
+    this.tweens.add({
+      targets: dialog, alpha: 1, scaleX: 1, scaleY: 1,
+      from: 0.6, ease: 'Back.Out', duration: 420,
+    });
+
+    dialog.modal(undefined, (result: { index: number }) => {
+      if (result.index === 0) {
+        this.scene.restart();
+      } else {
+        this.scene.start('MenuScene');
+      }
+    });
   }
 
   private showMpDeathScreen(): void {
