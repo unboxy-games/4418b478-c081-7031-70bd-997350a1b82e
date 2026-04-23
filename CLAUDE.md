@@ -12,7 +12,7 @@
 - **Enemy shooting**: Formation enemies fire bullet streams, frequency scales with level
 - **Player ship**: Left/right movement (Arrow keys or A/D), fires with Space
 - **Bullet system**: Player bullets (yellow), enemy bullets (orange-red)
-- **Lives system**: 2 lives; invincibility frames after being hit
+- **Lives system**: 3 lives; invincibility frames after being hit
 - **Score system**: Flagship = 150 pts, Escort = 80 pts, Drone = 40 pts; score popup on kill
 - **Level progression**: Clear all enemies → Wave banner → new formation (faster each wave)
 - **Game Over**: Dark overlay, final score shown, Space to restart, L for scoreboard
@@ -65,4 +65,4 @@
 - `phaser3-rex-plugins` — VirtualJoystickPlugin registered as global plugin `rexVirtualJoystick` in `main.ts`
 
 ## This Turn
-- Fixed virtual joystick double-offset bug: replaced `this.add.graphics()` + `fillCircle(jx, jy, r)` base/thumb with `this.add.circle(jx, jy, r, color, alpha)` Phaser Arc objects; the plugin calls `setPosition(jx, jy)` internally, so world-space Arc origins avoid the double-offset that pushed Graphics objects off-screen
+- Increased starting lives from 2 to 3; both property initializer and `create()` reset updated
