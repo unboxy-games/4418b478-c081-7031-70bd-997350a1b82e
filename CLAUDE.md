@@ -26,7 +26,7 @@
   - Wave banner scales up & fades on level transition
   - UI: score bounces on update; life icons = mini ship graphics
 - **Start screen**: Title screen with matching starfield, animated enemy rows, blinking "PRESS SPACE or TAP TO START", controls & score table; fades in/out on transition
-- **Touch / tablet controls**: Virtual joystick (bottom-left, radius 60, `phaser3-rex-plugins` VirtualJoystickPlugin, `4dir` mode) for left/right movement; explicit base (Graphics, depth 100) and thumb (Graphics, depth 101) circles passed to plugin config so they are always visible above background on iPad/tablet; circular FIRE button (bottom-right, radius 72) via Phaser Zone; both hidden on game over; tap-to-start and tap-to-restart still work; keyboard controls unchanged
+- **Touch / tablet controls**: Virtual joystick (bottom-left, radius 60, `phaser3-rex-plugins` VirtualJoystickPlugin, `4dir` mode) for left/right movement; base = `this.add.circle(jx, jy, 60, 0x4488ff, 0.22)` (depth 100), thumb = `this.add.circle(jx, jy, 28, 0x99ccff, 0.72)` (depth 101) — Phaser Arc/Shape objects so the plugin's internal `setPosition()` calls land correctly in world space without double-offsetting; circular FIRE button (bottom-right, radius 72) via Phaser Zone; both hidden on game over; tap-to-start and tap-to-restart still work; keyboard controls unchanged
 - **Persistent high score**: Saved via `unboxy.saves` (key `highScore`) on game over; loaded on scene start; HUD shows golden "HI  N" beneath SCORE; bounces on update; "★ NEW BEST ★" pulsing callout shown on game-over screen when record broken
 - **Global scoreboard**: Top-10 all-player leaderboard via `unboxy.gameData` (key `leaderboard`); displayed in `LeaderboardScene`; scores submitted on game over for authenticated players; accessible via L key on game-over screen; SPACE restarts / ESC returns to menu
 
@@ -65,4 +65,4 @@
 - `phaser3-rex-plugins` — VirtualJoystickPlugin registered as global plugin `rexVirtualJoystick` in `main.ts`
 
 ## This Turn
-- Fixed virtual joystick invisibility on iPad: created explicit base (semi-transparent blue ring, depth 100) and thumb (blue-white disc, depth 101) as Phaser Graphics objects and passed them into the VirtualJoystickPlugin config so they render above the background and all game objects
+- Fixed virtual joystick double-offset bug: replaced `this.add.graphics()` + `fillCircle(jx, jy, r)` base/thumb with `this.add.circle(jx, jy, r, color, alpha)` Phaser Arc objects; the plugin calls `setPosition(jx, jy)` internally, so world-space Arc origins avoid the double-offset that pushed Graphics objects off-screen

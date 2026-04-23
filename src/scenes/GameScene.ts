@@ -523,21 +523,10 @@ export class GameScene extends Phaser.Scene {
       const jx = 160;
       const jy = GAME_HEIGHT - 110;
 
-      // Explicit base: large semi-transparent ring so it renders above everything
-      const jsBase = this.add.graphics().setDepth(100);
-      jsBase.fillStyle(0x4488ff, 0.18);
-      jsBase.fillCircle(jx, jy, 60);
-      jsBase.lineStyle(2, 0x88bbff, 0.55);
-      jsBase.strokeCircle(jx, jy, 60);
-      jsBase.lineStyle(1, 0x88bbff, 0.25);
-      jsBase.strokeCircle(jx, jy, 38);
-
-      // Explicit thumb: solid-ish circle
-      const jsThumb = this.add.graphics().setDepth(101);
-      jsThumb.fillStyle(0x99ccff, 0.72);
-      jsThumb.fillCircle(jx, jy, 28);
-      jsThumb.lineStyle(2, 0xffffff, 0.6);
-      jsThumb.strokeCircle(jx, jy, 28);
+      // Use Phaser Shape circles — plugin positions these via setPosition(),
+      // so they must be at (jx, jy) in world space with no local-coord offset.
+      const jsBase  = this.add.circle(jx, jy, 60, 0x4488ff, 0.22).setDepth(100);
+      const jsThumb = this.add.circle(jx, jy, 28, 0x99ccff, 0.72).setDepth(101);
 
       this.joystick = plugin.add(this, {
         x:        jx,
