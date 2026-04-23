@@ -82,10 +82,4 @@
 - `rexUI!: any` declared on GameScene
 
 ## What Changed This Turn
-- Replaced the hand-rolled death overlay in `showRestartPrompt` with a `rexUI.add.confirmDialog`
-- Dialog title: "YOU DIED" (red, bold); content: "You scored X%", attempt number, personal-best line
-- Two buttons: **"▶ Play Again"** (blue) → restarts the run; **"Main Menu"** (dark) → goes to MenuScene
-- Modal blocks all background input while the dialog is open
-- Bounce-in tween (Back.Out, scale 0.6 → 1) animates the dialog on entry
-- Gold sparkle particle burst still fires for new personal bests
-- `waitingForRestart` is no longer set in the solo death path (dialog buttons own those actions)
+- Fixed camera drift after death: `onDeath()` now immediately zeros the physics body velocity, gravity override, and acceleration so the camera stops moving the instant the player dies

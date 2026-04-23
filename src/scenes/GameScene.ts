@@ -868,6 +868,12 @@ export class GameScene extends Phaser.Scene {
     if (!this.alive) return;
     this.alive = false;
 
+    // Kill all physics momentum so the camera stops drifting immediately
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(0, 0);
+    body.setGravityY(0);
+    body.setAcceleration(0, 0);
+
     // Publish death to remote immediately
     if (this.isMultiplayer) {
       try {
