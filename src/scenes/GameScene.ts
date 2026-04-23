@@ -25,7 +25,7 @@ export class GameScene extends Phaser.Scene {
   private formationOffset = 0;
   private formationDropY = 0;
 
-  private lives = 3;
+  private lives = 4;
   private score = 0;
   private highScore = 0;
   private level = 1;
@@ -63,7 +63,7 @@ export class GameScene extends Phaser.Scene {
 
   create(): void {
     // Reset all state
-    this.lives = 3;
+    this.lives = 4;
     this.score = 0;
     this.level = 1;
     // highScore intentionally NOT reset here — kept across restarts in-session
@@ -112,6 +112,8 @@ export class GameScene extends Phaser.Scene {
     this.fireKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this.leftKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A);
     this.rightKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+
+    this.input.addPointer(1); // enable two concurrent touch points (joystick + fire button)
 
     this.createTouchControls();
 
