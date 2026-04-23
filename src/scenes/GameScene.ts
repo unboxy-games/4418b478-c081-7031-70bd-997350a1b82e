@@ -520,13 +520,36 @@ export class GameScene extends Phaser.Scene {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const plugin = this.plugins.get('rexVirtualJoystick') as any;
     if (plugin) {
+      const jx = 160;
+      const jy = GAME_HEIGHT - 110;
+
+      // Explicit base: large semi-transparent ring so it renders above everything
+      const jsBase = this.add.graphics().setDepth(100);
+      jsBase.fillStyle(0x4488ff, 0.18);
+      jsBase.fillCircle(jx, jy, 60);
+      jsBase.lineStyle(2, 0x88bbff, 0.55);
+      jsBase.strokeCircle(jx, jy, 60);
+      jsBase.lineStyle(1, 0x88bbff, 0.25);
+      jsBase.strokeCircle(jx, jy, 38);
+
+      // Explicit thumb: solid-ish circle
+      const jsThumb = this.add.graphics().setDepth(101);
+      jsThumb.fillStyle(0x99ccff, 0.72);
+      jsThumb.fillCircle(jx, jy, 28);
+      jsThumb.lineStyle(2, 0xffffff, 0.6);
+      jsThumb.strokeCircle(jx, jy, 28);
+
       this.joystick = plugin.add(this, {
-        x:        160,
-        y:        GAME_HEIGHT - 110,
+        x:        jx,
+        y:        jy,
         radius:   60,
+        base:     jsBase,
+        thumb:    jsThumb,
         dir:      '4dir',
         forceMin: 12,
       });
+
+      this.touchControlObjects.push(jsBase, jsThumb);
     }
 
     // ── FIRE button (right side — circular) ─

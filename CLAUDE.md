@@ -26,7 +26,7 @@
   - Wave banner scales up & fades on level transition
   - UI: score bounces on update; life icons = mini ship graphics
 - **Start screen**: Title screen with matching starfield, animated enemy rows, blinking "PRESS SPACE or TAP TO START", controls & score table; fades in/out on transition
-- **Touch / tablet controls**: Virtual joystick (bottom-left, radius 60, `phaser3-rex-plugins` VirtualJoystickPlugin, `4dir` mode) for left/right movement; circular FIRE button (bottom-right, radius 72) via Phaser Zone; both hidden on game over; tap-to-start and tap-to-restart still work; keyboard controls unchanged
+- **Touch / tablet controls**: Virtual joystick (bottom-left, radius 60, `phaser3-rex-plugins` VirtualJoystickPlugin, `4dir` mode) for left/right movement; explicit base (Graphics, depth 100) and thumb (Graphics, depth 101) circles passed to plugin config so they are always visible above background on iPad/tablet; circular FIRE button (bottom-right, radius 72) via Phaser Zone; both hidden on game over; tap-to-start and tap-to-restart still work; keyboard controls unchanged
 - **Persistent high score**: Saved via `unboxy.saves` (key `highScore`) on game over; loaded on scene start; HUD shows golden "HI  N" beneath SCORE; bounces on update; "★ NEW BEST ★" pulsing callout shown on game-over screen when record broken
 - **Global scoreboard**: Top-10 all-player leaderboard via `unboxy.gameData` (key `leaderboard`); displayed in `LeaderboardScene`; scores submitted on game over for authenticated players; accessible via L key on game-over screen; SPACE restarts / ESC returns to menu
 
@@ -65,4 +65,4 @@
 - `phaser3-rex-plugins` — VirtualJoystickPlugin registered as global plugin `rexVirtualJoystick` in `main.ts`
 
 ## This Turn
-- Reduced virtual joystick radius from 80 to 60 (smaller touch target)
+- Fixed virtual joystick invisibility on iPad: created explicit base (semi-transparent blue ring, depth 100) and thumb (blue-white disc, depth 101) as Phaser Graphics objects and passed them into the VirtualJoystickPlugin config so they render above the background and all game objects
