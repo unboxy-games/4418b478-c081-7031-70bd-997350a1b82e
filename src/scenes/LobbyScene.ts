@@ -24,6 +24,9 @@ export class LobbyScene extends Phaser.Scene {
   private joinInputText!: Phaser.GameObjects.Text;
   private isHost = false;
   private currentRoomCode = '';
+  private listPollTimer: Phaser.Time.TimerEvent | null = null;
+  private roomBrowserRows: Phaser.GameObjects.GameObject[] = [];
+  private roomBrowserStatusText: Phaser.GameObjects.Text | null = null;
 
   constructor() {
     super({ key: 'LobbyScene' });
@@ -133,17 +136,18 @@ export class LobbyScene extends Phaser.Scene {
     this.statusText.setVisible(false);
 
     const cx = GAME_WIDTH / 2;
-    const baseY = 260;
+    const baseY = 240;
 
     // Online mode buttons
     if (this.unboxy?.isAuthenticated) {
       this.makeMenuButton('CREATE ROOM', cx, baseY, 0x3b82f6, () => this.createRoom());
-      this.makeMenuButton('JOIN ROOM', cx, baseY + 80, 0x22c55e, () => this.showJoinInput());
-      this.makeMenuButton('QUICK MATCH', cx, baseY + 160, 0x8b5cf6, () => this.quickMatch());
+      this.makeMenuButton('JOIN WITH CODE', cx, baseY + 72, 0x22c55e, () => this.showJoinInput());
+      this.makeMenuButton('BROWSE ROOMS', cx, baseY + 144, 0xf59e0b, () => this.showRoomBrowser());
+      this.makeMenuButton('QUICK MATCH', cx, baseY + 216, 0x8b5cf6, () => this.quickMatch());
     } else {
       this.makeMenuButton('PLAY ONLINE (Sign in)', cx, baseY, 0x3b82f6, () => this.quickMatch());
     }
-    this.makeMenuButton('PLAY OFFLINE', cx, baseY + 240, 0x64748b, () => this.startOffline());
+    this.makeMenuButton('PLAY OFFLINE', cx, baseY + 308, 0x64748b, () => this.startOffline());
   }
 
   private showOfflineOption(): void {
@@ -206,6 +210,7 @@ export class LobbyScene extends Phaser.Scene {
         roomCode: this.currentRoomCode,
         maxClients: 4,
         displayName: this.unboxy.user?.name ?? 'Player',
+        metadata: { hostName: this.unboxy.user?.name ?? 'Player' },
       });
     } catch (e: any) {
       if (e?.code === 'REALTIME_UNAVAILABLE') {
@@ -306,6 +311,7 @@ export class LobbyScene extends Phaser.Scene {
       this.room = await this.unboxy.rooms.joinOrCreate('lobby', {
         maxClients: 4,
         displayName: this.unboxy.user?.name ?? 'Player',
+        metadata: { hostName: this.unboxy.user?.name ?? 'Player' },
       });
     } catch (e: any) {
       if (e?.code === 'REALTIME_UNAVAILABLE') {
@@ -320,6 +326,209 @@ export class LobbyScene extends Phaser.Scene {
     // isHost for quick match is determined in the first onStateChange callback
     // (state.players is undefined synchronously after joinOrCreate)
     this.isHost = false;
+    this.statusText.setVisible(false);
+    this.showLobbyWaiting();
+  }
+
+  private showRoomBrowser(): void {
+    this.clearMain();
+    this.statusText.setVisible(false);
+
+    const cx = GAME_WIDTH / 2;
+
+    // Panel background
+    const panelGfx = this.add.graphics().setDepth(8);
+    panelGfx.fillStyle(0x0d1b2a, 0.92);
+    panelGfx.fillRoundedRect(cx - 460, 195, 920, 390, 14);
+    panelGfx.lineStyle(2, 0xf59e0b, 0.5);
+    panelGfx.strokeRoundedRect(cx - 460, 195, 920, 390, 14);
+    this.mainContainer.add(panelGfx as any);
+
+    // Header
+    const headerTitle = this.add.text(cx, 215, 'OPEN ROOMS', {
+      fontSize: '16px', color: '#f59e0b', letterSpacing: 5,
+    }).setOrigin(0.5).setDepth(10);
+
+    // Column headers
+    const colY = 248;
+    const colHeaders = [
+      this.add.text(cx - 390, colY, 'CODE', { fontSize: '13px', color: '#475569', letterSpacing: 3 }).setDepth(10),
+      this.add.text(cx - 200, colY, 'HOST', { fontSize: '13px', color: '#475569', letterSpacing: 3 }).setDepth(10),
+      this.add.text(cx + 110, colY, 'PLAYERS', { fontSize: '13px', color: '#475569', letterSpacing: 3 }).setDepth(10),
+    ];
+
+    const divGfx = this.add.graphics().setDepth(9);
+    divGfx.lineStyle(1, 0x334155, 0.8);
+    divGfx.lineBetween(cx - 450, 265, cx + 450, 265);
+    this.mainContainer.add([divGfx as any, headerTitle as any, ...colHeaders as any[]]);
+
+    // Refresh indicator (spinning dots)
+    this.roomBrowserStatusText = this.add.text(cx, 355, 'Loading rooms...', {
+      fontSize: '18px', color: '#475569',
+    }).setOrigin(0.5).setDepth(10);
+    this.mainContainer.add(this.roomBrowserStatusText as any);
+
+    // Back + Refresh buttons
+    this.makeMenuButton('BACK', cx - 180, 625, 0x64748b, () => {
+      this.stopListPoll();
+      this.showMainMenu();
+    });
+    this.makeMenuButton('REFRESH', cx + 180, 625, 0xf59e0b, () => {
+      this.refreshRoomList();
+    });
+
+    // Start polling
+    this.stopListPoll();
+    this.refreshRoomList();
+    this.listPollTimer = this.time.addEvent({
+      delay: 3000,
+      loop: true,
+      callback: () => { this.refreshRoomList(); },
+    });
+  }
+
+  private async refreshRoomList(): Promise<void> {
+    if (!this.unboxy) return;
+    try {
+      const rooms: Array<{
+        roomId: string;
+        roomCode: string;
+        clients: number;
+        maxClients: number;
+        metadata?: any;
+      }> = await this.unboxy.rooms.list();
+
+      // Clear old rows
+      this.roomBrowserRows.forEach(o => (o as Phaser.GameObjects.GameObject).destroy());
+      this.roomBrowserRows = [];
+
+      const open = rooms.filter(r => r.clients < r.maxClients);
+
+      if (open.length === 0) {
+        if (this.roomBrowserStatusText) {
+          this.roomBrowserStatusText.setText('No open rooms right now — create one!').setVisible(true);
+        }
+        return;
+      }
+
+      if (this.roomBrowserStatusText) {
+        this.roomBrowserStatusText.setVisible(false);
+      }
+
+      const cx = GAME_WIDTH / 2;
+      const rowH = 58;
+      const firstRowY = 290;
+      const maxRows = 5;
+
+      open.slice(0, maxRows).forEach((entry, i) => {
+        const rowY = firstRowY + i * rowH;
+        const isEven = i % 2 === 0;
+
+        // Row highlight
+        const rowBg = this.add.graphics().setDepth(9);
+        rowBg.fillStyle(isEven ? 0x1e3a5f : 0x172a47, 0.5);
+        rowBg.fillRoundedRect(cx - 450, rowY - 20, 900, rowH - 4, 6);
+        this.roomBrowserRows.push(rowBg);
+
+        // Room code
+        const codeStr = entry.roomCode || 'PUBLIC';
+        const codeCol = entry.roomCode ? 0x60a5fa : 0x8b5cf6;
+        const codeT = this.add.text(cx - 390, rowY, codeStr, {
+          fontSize: '20px', fontStyle: 'bold',
+          color: '#' + codeCol.toString(16).padStart(6, '0'),
+        }).setOrigin(0, 0.5).setDepth(10);
+        this.roomBrowserRows.push(codeT);
+
+        // Host / display name from metadata
+        const hostName: string = (entry.metadata as any)?.hostName ?? 'Unknown';
+        const hostT = this.add.text(cx - 200, rowY, hostName, {
+          fontSize: '18px', color: '#cbd5e1',
+        }).setOrigin(0, 0.5).setDepth(10);
+        this.roomBrowserRows.push(hostT);
+
+        // Player count bubbles
+        for (let p = 0; p < entry.maxClients; p++) {
+          const filled = p < entry.clients;
+          const dotGfx = this.add.graphics().setDepth(10);
+          dotGfx.fillStyle(filled ? PLAYER_COLORS[p % 4] : 0x334155, filled ? 0.9 : 0.5);
+          dotGfx.fillCircle(cx + 120 + p * 28, rowY, 9);
+          this.roomBrowserRows.push(dotGfx);
+        }
+
+        const countT = this.add.text(cx + 240, rowY, `${entry.clients}/${entry.maxClients}`, {
+          fontSize: '16px', color: '#64748b',
+        }).setOrigin(0, 0.5).setDepth(10);
+        this.roomBrowserRows.push(countT);
+
+        // JOIN button
+        const btnW = 100, btnH = 36;
+        const btnGfx = this.add.graphics().setDepth(10);
+        btnGfx.fillStyle(0x22c55e, 0.25);
+        btnGfx.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 8);
+        btnGfx.lineStyle(2, 0x22c55e, 0.8);
+        btnGfx.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 8);
+        const btnT = this.add.text(0, 0, 'JOIN', {
+          fontSize: '16px', fontStyle: 'bold', color: '#ffffff',
+        }).setOrigin(0.5);
+        const btnCont = this.add.container(cx + 400, rowY, [btnGfx, btnT])
+          .setDepth(10)
+          .setInteractive(new Phaser.Geom.Rectangle(-btnW / 2, -btnH / 2, btnW, btnH), Phaser.Geom.Rectangle.Contains);
+
+        btnCont.on('pointerover', () => {
+          btnGfx.clear();
+          btnGfx.fillStyle(0x22c55e, 0.6);
+          btnGfx.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 8);
+          btnGfx.lineStyle(2, 0x22c55e, 1);
+          btnGfx.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 8);
+          this.tweens.add({ targets: btnCont, scaleX: 1.08, scaleY: 1.08, duration: 80 });
+        });
+        btnCont.on('pointerout', () => {
+          btnGfx.clear();
+          btnGfx.fillStyle(0x22c55e, 0.25);
+          btnGfx.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 8);
+          btnGfx.lineStyle(2, 0x22c55e, 0.8);
+          btnGfx.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 8);
+          this.tweens.add({ targets: btnCont, scaleX: 1, scaleY: 1, duration: 80 });
+        });
+        btnCont.on('pointerdown', () => this.joinRoomById(entry.roomId, entry.roomCode));
+
+        this.roomBrowserRows.push(btnCont);
+      });
+    } catch {
+      if (this.roomBrowserStatusText) {
+        this.roomBrowserStatusText.setText('Could not load rooms — retrying...').setVisible(true);
+      }
+    }
+  }
+
+  private stopListPoll(): void {
+    if (this.listPollTimer) {
+      this.listPollTimer.remove(false);
+      this.listPollTimer = null;
+    }
+    this.roomBrowserRows.forEach(o => (o as Phaser.GameObjects.GameObject).destroy());
+    this.roomBrowserRows = [];
+  }
+
+  private async joinRoomById(roomId: string, roomCode: string): Promise<void> {
+    this.stopListPoll();
+    this.clearMain();
+    this.statusText.setText('Joining room...').setVisible(true);
+    try {
+      this.room = await this.unboxy.rooms.joinById(roomId, {
+        displayName: this.unboxy.user?.name ?? 'Player',
+      });
+    } catch (e: any) {
+      if (e?.code === 'REALTIME_UNAVAILABLE') {
+        this.startOffline();
+      } else {
+        this.statusText.setText('Could not join room.\nIt may be full or closed.');
+        this.time.delayedCall(2500, () => this.showRoomBrowser());
+      }
+      return;
+    }
+    this.isHost = false;
+    this.currentRoomCode = roomCode || 'PUBLIC';
     this.statusText.setVisible(false);
     this.showLobbyWaiting();
   }
@@ -505,6 +714,8 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   private clearMain(): void {
+    this.stopListPoll();
+    this.roomBrowserStatusText = null;
     this.mainContainer.removeAll(true);
     this.playerListTexts.forEach(t => t.destroy());
     this.playerListTexts = [];
