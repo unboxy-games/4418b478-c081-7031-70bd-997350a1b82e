@@ -17,6 +17,7 @@ export class LobbyScene extends Phaser.Scene {
   private roomCodeText!: Phaser.GameObjects.Text;
   private playerListTexts: Phaser.GameObjects.Text[] = [];
   private startBtn!: Phaser.GameObjects.Container;
+  private waitingText: Phaser.GameObjects.Text | null = null;
   private mainContainer!: Phaser.GameObjects.Container;
   private inputActive = false;
   private joinCodeInput = '';
@@ -316,7 +317,9 @@ export class LobbyScene extends Phaser.Scene {
       return;
     }
     this.currentRoomCode = 'PUBLIC';
-    this.isHost = (this.room.state.players.size === 1);
+    // isHost for quick match is determined in the first onStateChange callback
+    // (state.players is undefined synchronously after joinOrCreate)
+    this.isHost = false;
     this.statusText.setVisible(false);
     this.showLobbyWaiting();
   }
@@ -345,19 +348,21 @@ export class LobbyScene extends Phaser.Scene {
 
     this.mainContainer.add([codeLabel as any, codeBg as any, codeText as any, waitLabel as any]);
 
-    // Render player list initially
-    this.refreshPlayerList();
+    // Player list and start button are populated by the first onStateChange.
+    // Do NOT read room.state.* synchronously here — state arrives as a separate
+    // message a few ms after joinOrCreate resolves, so .players is undefined on
+    // the joining client until that message lands.
 
-    // Start button (host only, needs 2+ players)
-    if (this.isHost) {
-      const startCont = this.makeMenuButton('START GAME', cx, 580, 0x22c55e, () => this.startGame());
-      this.startBtn = startCont;
-      this.updateStartButton();
-    } else {
-      this.add.text(cx, 580, 'Waiting for host to start...', {
-        fontSize: '18px', color: '#64748b',
-      }).setOrigin(0.5).setDepth(10);
-    }
+    // Start button — always created; shown/hidden by updateStartButton()
+    const startCont = this.makeMenuButton('START GAME', cx, 580, 0x22c55e, () => this.startGame());
+    this.startBtn = startCont;
+    this.startBtn.setAlpha(0).setVisible(false);
+    (this.startBtn as any).input.enabled = false;
+
+    // "Waiting" text — shown when not host; toggled by updateStartButton()
+    this.waitingText = this.add.text(cx, 580, 'Waiting for host to start...', {
+      fontSize: '18px', color: '#64748b',
+    }).setOrigin(0.5).setDepth(10);
 
     // Back button
     this.makeMenuButton('LEAVE', cx, 650, 0x64748b, () => {
@@ -369,11 +374,24 @@ export class LobbyScene extends Phaser.Scene {
     // Subscribe to room state changes
     if (this.room) {
       const unsubState = this.room.onStateChange(() => {
+        // For quick match we couldn't read state synchronously after joinOrCreate.
+        // Detect host on the first state delivery: if we're the first (and only)
+        // player in the map, we created this room — we're the host.
+        if (this.currentRoomCode === 'PUBLIC' && !this.isHost && this.room?.state?.players) {
+          let firstSid = '';
+          this.room.state.players.forEach((_p: any, sid: string) => {
+            if (!firstSid) firstSid = sid;
+          });
+          if (firstSid === this.room.sessionId) {
+            this.isHost = true;
+          }
+        }
+
         this.refreshPlayerList();
-        if (this.isHost) this.updateStartButton();
+        this.updateStartButton();
 
         // Check if host started the game
-        const phase = this.room.data.get('gamePhase') as string | undefined;
+        const phase = this.room?.data?.get?.('gamePhase') as string | undefined;
         if (phase === 'playing') {
           this.launchGame();
         }
@@ -397,7 +415,8 @@ export class LobbyScene extends Phaser.Scene {
     this.playerListTexts.forEach(t => t.destroy());
     this.playerListTexts = [];
 
-    if (!this.room) return;
+    // Guard: state.players is undefined until the first onStateChange fires
+    if (!this.room?.state?.players) return;
 
     const cx = GAME_WIDTH / 2;
     let idx = 0;
@@ -426,15 +445,24 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   private updateStartButton(): void {
-    if (!this.startBtn || !this.room) return;
+    // Guard: state.players is undefined until the first onStateChange fires
+    if (!this.startBtn || !this.room?.state?.players) return;
     const playerCount = this.room.state.players.size;
     const canStart = playerCount >= 2;
-    this.startBtn.setAlpha(canStart ? 1 : 0.4);
-    (this.startBtn as any).input.enabled = canStart;
+
+    if (this.isHost) {
+      this.startBtn.setVisible(true).setAlpha(canStart ? 1 : 0.4);
+      (this.startBtn as any).input.enabled = canStart;
+      this.waitingText?.setVisible(false);
+    } else {
+      this.startBtn.setVisible(false).setAlpha(0);
+      (this.startBtn as any).input.enabled = false;
+      this.waitingText?.setVisible(true);
+    }
   }
 
   private async startGame(): Promise<void> {
-    if (!this.room) return;
+    if (!this.room?.state?.players) return;
     const playerCount = Math.min(this.room.state.players.size, 4);
     if (playerCount < 2) return;
 
@@ -458,8 +486,9 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   private launchGame(): void {
-    if (!this.room) return;
-    const order = this.room.data.get('playerOrder') as string[];
+    if (!this.room?.data) return;
+    const order = this.room.data.get('playerOrder') as string[] | undefined;
+    if (!order) return;
     const myIdx = order.indexOf(this.room.sessionId);
 
     setActiveRoom(this.room, myIdx >= 0 ? myIdx : 0, order);

@@ -28,6 +28,10 @@
 - Public quick match: `joinOrCreate('lobby', { maxClients: 4, ... })` (no roomCode)
 
 ## Changes This Turn
-- Fixed lobby staying on room-code screen by moving `showLobbyWaiting()` outside the try-catch in all three flow methods (createRoom, joinRoom, quickMatch) — previously any error thrown inside showLobbyWaiting() was caught and triggered the "go back to menu" path
-- Fixed display name lookup in refreshPlayerList to use `_p.displayName` from room state instead of `room.player.get(sid, 'displayName')` (the KV store had nothing written there, likely causing the throw)
-- Added `room.onError` handler in showLobbyWaiting so connection drops show a message and navigate back gracefully
+- Fixed joiner crash (`TypeError: Cannot read properties of undefined (reading 'forEach')`) — root cause was reading `room.state.players` synchronously right after `await joinOrCreate`; state arrives as a separate message a few ms later so `.players` is `undefined` on the joining client until `onStateChange` fires
+- Removed all synchronous `refreshPlayerList()` / `updateStartButton()` calls from `showLobbyWaiting()`; both are now driven exclusively by `onStateChange`
+- Added `if (!this.room?.state?.players) return` guards to `refreshPlayerList`, `updateStartButton`, and `startGame`
+- Added `if (!this.room?.data) return` + `if (!order) return` guards to `launchGame`
+- Fixed quick-match `isHost` detection: removed synchronous `this.room.state.players.size === 1` read; `isHost` now defaults to `false` and is resolved in the first `onStateChange` (checks if our sessionId is the first entry in the players map)
+- Replaced the isHost if/else render branch in `showLobbyWaiting` with always-creating both start button (hidden) and waiting text; `updateStartButton` toggles both based on isHost + player count
+- Guarded `this.room.data.get('gamePhase')` in `onStateChange` with optional chaining
