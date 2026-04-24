@@ -28,6 +28,6 @@
 - Public quick match: `joinOrCreate('lobby', { maxClients: 4, ... })` (no roomCode)
 
 ## Changes This Turn
-- Fixed all three `joinOrCreate` call sites in LobbyScene to use room type `'lobby'` instead of invalid custom types (`'blokus-<code>'`, `'blokus-public'`)
-- Moved room differentiation to the `roomCode` option as required by the SDK
-- Replaced invalid `maxPlayers` option with correct `maxClients` in createRoom and quickMatch
+- Fixed lobby staying on room-code screen by moving `showLobbyWaiting()` outside the try-catch in all three flow methods (createRoom, joinRoom, quickMatch) — previously any error thrown inside showLobbyWaiting() was caught and triggered the "go back to menu" path
+- Fixed display name lookup in refreshPlayerList to use `_p.displayName` from room state instead of `room.player.get(sid, 'displayName')` (the KV store had nothing written there, likely causing the throw)
+- Added `room.onError` handler in showLobbyWaiting so connection drops show a message and navigate back gracefully

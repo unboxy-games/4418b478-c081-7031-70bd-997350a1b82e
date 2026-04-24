@@ -206,9 +206,6 @@ export class LobbyScene extends Phaser.Scene {
         maxClients: 4,
         displayName: this.unboxy.user?.name ?? 'Player',
       });
-      this.isHost = true;
-      this.statusText.setVisible(false);
-      this.showLobbyWaiting();
     } catch (e: any) {
       if (e?.code === 'REALTIME_UNAVAILABLE') {
         this.startOffline();
@@ -216,7 +213,11 @@ export class LobbyScene extends Phaser.Scene {
         this.statusText.setText('Failed to create room.\nTry again.');
         this.time.delayedCall(2000, () => this.showMainMenu());
       }
+      return;
     }
+    this.isHost = true;
+    this.statusText.setVisible(false);
+    this.showLobbyWaiting();
   }
 
   private showJoinInput(): void {
@@ -278,10 +279,6 @@ export class LobbyScene extends Phaser.Scene {
         roomCode: this.joinCodeInput,
         displayName: this.unboxy.user?.name ?? 'Player',
       });
-      this.isHost = false;
-      this.currentRoomCode = this.joinCodeInput;
-      this.statusText.setVisible(false);
-      this.showLobbyWaiting();
     } catch (e: any) {
       if (e?.code === 'REALTIME_UNAVAILABLE') {
         this.startOffline();
@@ -289,25 +286,26 @@ export class LobbyScene extends Phaser.Scene {
         this.statusText.setText('Could not join room.\nCheck the code and try again.');
         this.time.delayedCall(2500, () => this.showMainMenu());
       }
+      return;
     }
+    this.isHost = false;
+    this.currentRoomCode = this.joinCodeInput;
+    this.statusText.setVisible(false);
+    this.showLobbyWaiting();
   }
 
   private async quickMatch(): Promise<void> {
     this.clearMain();
     this.statusText.setText('Finding a match...').setVisible(true);
+    if (!this.unboxy?.isAuthenticated) {
+      this.startOffline();
+      return;
+    }
     try {
-      if (!this.unboxy?.isAuthenticated) {
-        this.startOffline();
-        return;
-      }
       this.room = await this.unboxy.rooms.joinOrCreate('lobby', {
         maxClients: 4,
         displayName: this.unboxy.user?.name ?? 'Player',
       });
-      this.currentRoomCode = 'PUBLIC';
-      this.isHost = (this.room.state.players.size === 1);
-      this.statusText.setVisible(false);
-      this.showLobbyWaiting();
     } catch (e: any) {
       if (e?.code === 'REALTIME_UNAVAILABLE') {
         this.startOffline();
@@ -315,7 +313,12 @@ export class LobbyScene extends Phaser.Scene {
         this.statusText.setText('Matchmaking failed.\nPlaying offline.').setVisible(true);
         this.time.delayedCall(2000, () => this.startOffline());
       }
+      return;
     }
+    this.currentRoomCode = 'PUBLIC';
+    this.isHost = (this.room.state.players.size === 1);
+    this.statusText.setVisible(false);
+    this.showLobbyWaiting();
   }
 
   private showLobbyWaiting(): void {
@@ -365,7 +368,7 @@ export class LobbyScene extends Phaser.Scene {
 
     // Subscribe to room state changes
     if (this.room) {
-      const unsub = this.room.onStateChange(() => {
+      const unsubState = this.room.onStateChange(() => {
         this.refreshPlayerList();
         if (this.isHost) this.updateStartButton();
 
@@ -375,7 +378,17 @@ export class LobbyScene extends Phaser.Scene {
           this.launchGame();
         }
       });
-      this.unsubs.push(unsub);
+      this.unsubs.push(unsubState);
+
+      const unsubError = this.room.onError((_code: number, message: string) => {
+        console.warn('[lobby] room error:', message);
+        this.statusText.setText('Connection lost.\nReturning to menu...').setVisible(true);
+        this.time.delayedCall(2000, () => {
+          this.room = null;
+          this.showMainMenu();
+        });
+      });
+      this.unsubs.push(unsubError);
     }
   }
 
@@ -391,7 +404,7 @@ export class LobbyScene extends Phaser.Scene {
     this.room.state.players.forEach((_p: any, sid: string) => {
       const pi = idx % 4;
       const color = PLAYER_COLORS[pi];
-      const name = (this.room.player.get(sid, 'displayName') as string | undefined) ?? 'Player ' + (idx + 1);
+      const name = (_p.displayName as string | undefined) ?? 'Player ' + (idx + 1);
       const isMe = sid === this.room.sessionId;
 
       const row = this.add.text(cx, 350 + idx * 42, `${PLAYER_NAMES[pi]}: ${name}${isMe ? ' (You)' : ''}`, {
