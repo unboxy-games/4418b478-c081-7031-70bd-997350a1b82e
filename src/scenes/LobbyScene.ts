@@ -201,9 +201,10 @@ export class LobbyScene extends Phaser.Scene {
     this.statusText.setText('Creating room...').setVisible(true);
     try {
       this.currentRoomCode = randomCode();
-      this.room = await this.unboxy.rooms.joinOrCreate('blokus-' + this.currentRoomCode, {
+      this.room = await this.unboxy.rooms.joinOrCreate('lobby', {
+        roomCode: this.currentRoomCode,
+        maxClients: 4,
         displayName: this.unboxy.user?.name ?? 'Player',
-        maxPlayers: 4,
       });
       this.isHost = true;
       this.statusText.setVisible(false);
@@ -273,7 +274,8 @@ export class LobbyScene extends Phaser.Scene {
     this.clearMain();
     this.statusText.setText('Joining room...').setVisible(true);
     try {
-      this.room = await this.unboxy.rooms.joinOrCreate('blokus-' + this.joinCodeInput, {
+      this.room = await this.unboxy.rooms.joinOrCreate('lobby', {
+        roomCode: this.joinCodeInput,
         displayName: this.unboxy.user?.name ?? 'Player',
       });
       this.isHost = false;
@@ -298,9 +300,9 @@ export class LobbyScene extends Phaser.Scene {
         this.startOffline();
         return;
       }
-      this.room = await this.unboxy.rooms.joinOrCreate('blokus-public', {
+      this.room = await this.unboxy.rooms.joinOrCreate('lobby', {
+        maxClients: 4,
         displayName: this.unboxy.user?.name ?? 'Player',
-        maxPlayers: 4,
       });
       this.currentRoomCode = 'PUBLIC';
       this.isHost = (this.room.state.players.size === 1);
