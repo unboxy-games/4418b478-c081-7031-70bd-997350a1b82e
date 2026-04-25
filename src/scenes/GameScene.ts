@@ -578,11 +578,13 @@ export class GameScene extends Phaser.Scene {
       BOARD_PX, BOARD_PX
     ).setInteractive().setDepth(4);
 
-    // ── Mouse: hover moves the preview continuously ──────────────────────────
+    // ── Hover / drag moves the preview continuously ──────────────────────────
+    // Fires on mouse move (always) and on touch drag (finger held + moving).
+    // This gives touch users natural drag-to-position behaviour.
     boardZone.on('pointermove', (ptr: Phaser.Input.Pointer) => {
-      if (this.isTouchDevice) return; // touch devices have no cursor; skip
       const tx = Math.floor((ptr.x - BOARD_ORIG_X) / CELL);
       const ty = Math.floor((ptr.y - BOARD_ORIG_Y) / CELL);
+      if (this.hoverTile && this.hoverTile.x === tx && this.hoverTile.y === ty) return; // no change
       this.hoverTile = { x: tx, y: ty };
       this.renderPreview();
     });

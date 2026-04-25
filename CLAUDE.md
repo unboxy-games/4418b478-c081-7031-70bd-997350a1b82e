@@ -34,7 +34,7 @@
 ## Changes This Turn
 - Overhauled touch/iPad board interaction:
   - `navigator.maxTouchPoints > 0` detected once at startup — no flaky per-event type checks
-  - **Touch flow**: every board tap repositions the preview (sticky — preview stays after finger lifts). Piece is placed only via the **✓ PLACE PIECE** button. User can freely rotate/flip and retap to reposition before confirming.
+  - **Touch flow**: drag finger across board to move preview in real-time (pointermove fires during touch drag). Tap to set a position, or drag to reposition. Preview stays sticky after finger lifts. Piece is placed only via the **✓ PLACE PIECE** button. User can freely rotate/flip and retap/redrag to reposition before confirming.
   - **Mouse flow**: hover moves preview, click places immediately (unchanged from original).
   - `pointerout` clears preview on mouse only; on touch devices the preview is never cleared by pointer leaving the zone.
   - `this.input.addPointer(2)` enables up to 3 concurrent touch pointers.
