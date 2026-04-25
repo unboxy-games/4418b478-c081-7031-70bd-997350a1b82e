@@ -36,6 +36,52 @@ const LEVEL: [number, OType, number][] = [
   [11980, 's', 3], [12270, 's', 2], [12560, 's', 3],
 ];
 
+// ── NPC Bot types & configuration ─────────────────────────────────────────────
+
+interface NpcJumpEvent { atX: number }
+
+interface NpcBot {
+  image:        Phaser.Physics.Arcade.Image;
+  rotation:     number;
+  wasGrounded:  boolean;
+  jumpsLeft:    number;
+  alive:        boolean;
+  won:          boolean;
+  nameTxt:      Phaser.GameObjects.Text;
+  deathTints:   number[];
+  jumpSchedule: NpcJumpEvent[];
+  scheduleIdx:  number;
+  name:         string;
+}
+
+/** Each NPC config controls jump timing (px before obstacle) and mistake probability */
+const NPC_CONFIGS = [
+  {
+    name:         'Dash',
+    textureKey:   'cube3',
+    labelColor:   '#44ffaa',
+    deathTints:   [0x00cc88, 0x44ffbb, 0x00ff99, 0xffffff],
+    jumpDistance: 70,   // px before obstacle — aggressive (jumps late)
+    mistakeRate:  0.04, // 4 % chance to skip a jump entirely
+  },
+  {
+    name:         'Blaze',
+    textureKey:   'cube4',
+    labelColor:   '#cc88ff',
+    deathTints:   [0xaa44ff, 0xcc88ff, 0x8822ff, 0xffffff],
+    jumpDistance: 100,
+    mistakeRate:  0.07,
+  },
+  {
+    name:         'Nova',
+    textureKey:   'cube5',
+    labelColor:   '#ff88cc',
+    deathTints:   [0xff2299, 0xff88cc, 0xff0066, 0xffffff],
+    jumpDistance: 130,  // jumps earlier (cautious) but mistakes more often
+    mistakeRate:  0.10,
+  },
+];
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export class GameScene extends Phaser.Scene {
@@ -67,6 +113,9 @@ export class GameScene extends Phaser.Scene {
   private pauseBtnY          = 0;
   private pauseIconGfx!:     Phaser.GameObjects.Graphics;
 
+  // ── NPC bots ───────────────────────────────────────────────────────────────
+  private npcs:              NpcBot[] = [];
+
   // ── Multiplayer state ──────────────────────────────────────────────────────
   private isMultiplayer      = false;
   private remotePlayer?:     Phaser.GameObjects.Image;
@@ -90,6 +139,7 @@ export class GameScene extends Phaser.Scene {
     this.waitingForRestart  = false;
     this.isPaused           = false;
     this.pauseContents      = [];
+    this.npcs               = [];
     this.remotePlayer       = undefined;
     this.localNameTxt       = undefined;
     this.remoteNameTxt      = undefined;
@@ -100,11 +150,15 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, WORLD_W, GAME_HEIGHT);
     this.physics.world.gravity.y = GRAVITY;
 
+    // Detect multiplayer mode early so buildNpcs() knows how many bots to create
+    this.isMultiplayer = this.game.registry.get('multiplayer') === true;
+
     this.buildTextures();
     this.buildBackground();
     this.buildGround();
     this.buildLevel();
     this.buildPlayer();
+    this.buildNpcs();
     this.buildParticles();
     this.buildHUD();
     this.buildCamera();
@@ -115,8 +169,7 @@ export class GameScene extends Phaser.Scene {
       this.scene.launch('UIScene');
     }
 
-    // Multiplayer — wire up if the lobby handed us a room
-    this.isMultiplayer = this.game.registry.get('multiplayer') === true;
+    // Multiplayer — wire up room if the lobby handed us one
     if (this.isMultiplayer) this.initMultiplayer();
   }
 
@@ -167,6 +220,9 @@ export class GameScene extends Phaser.Scene {
 
     // ── fall-off check: treat dropping below the screen as a death ──
     if (this.player.y > GAME_HEIGHT + 100) this.onDeath();
+
+    // ── NPC bots ──
+    this.updateNpcs(dt);
 
     // ── multiplayer: lerp remote player + float name labels ──
     if (this.isMultiplayer) {
@@ -276,6 +332,60 @@ export class GameScene extends Phaser.Scene {
       g.fillRoundedRect(370, 80, 90, 90, 8);
       g.lineStyle(1, 0x3355cc, 0.25);
       g.strokeRoundedRect(50, 50, 150, 150, 10);
+    });
+
+    // ── NPC cube: Dash — teal/emerald ──
+    mk('cube3', B, B, g => {
+      g.fillStyle(0x004433, 0.25);
+      g.fillRoundedRect(-5, -5, B + 10, B + 10, 12);
+      g.fillStyle(0x00cc88);
+      g.fillRoundedRect(0, 0, B, B, 9);
+      g.fillStyle(0x44ffbb, 0.5);
+      g.fillRoundedRect(4, 4, B - 8, 18, 5);
+      g.fillStyle(0x002211);
+      g.fillRoundedRect(13, 13, B - 26, B - 26, 3);
+      const cx3 = B / 2, cy3 = B / 2, r3 = 10;
+      g.fillStyle(0x88ffcc);
+      g.fillTriangle(cx3, cy3 - r3, cx3 + r3, cy3, cx3, cy3 + r3);
+      g.fillTriangle(cx3, cy3 - r3, cx3 - r3, cy3, cx3, cy3 + r3);
+      g.lineStyle(2, 0x44ffaa);
+      g.strokeRoundedRect(0, 0, B, B, 9);
+    });
+
+    // ── NPC cube: Blaze — purple/violet ──
+    mk('cube4', B, B, g => {
+      g.fillStyle(0x330066, 0.25);
+      g.fillRoundedRect(-5, -5, B + 10, B + 10, 12);
+      g.fillStyle(0xaa44ff);
+      g.fillRoundedRect(0, 0, B, B, 9);
+      g.fillStyle(0xcc88ff, 0.5);
+      g.fillRoundedRect(4, 4, B - 8, 18, 5);
+      g.fillStyle(0x220044);
+      g.fillRoundedRect(13, 13, B - 26, B - 26, 3);
+      const cx4 = B / 2, cy4 = B / 2, r4 = 10;
+      g.fillStyle(0xee88ff);
+      g.fillTriangle(cx4, cy4 - r4, cx4 + r4, cy4, cx4, cy4 + r4);
+      g.fillTriangle(cx4, cy4 - r4, cx4 - r4, cy4, cx4, cy4 + r4);
+      g.lineStyle(2, 0xcc66ff);
+      g.strokeRoundedRect(0, 0, B, B, 9);
+    });
+
+    // ── NPC cube: Nova — hot pink/magenta ──
+    mk('cube5', B, B, g => {
+      g.fillStyle(0x660033, 0.25);
+      g.fillRoundedRect(-5, -5, B + 10, B + 10, 12);
+      g.fillStyle(0xff2299);
+      g.fillRoundedRect(0, 0, B, B, 9);
+      g.fillStyle(0xff88cc, 0.5);
+      g.fillRoundedRect(4, 4, B - 8, 18, 5);
+      g.fillStyle(0x440022);
+      g.fillRoundedRect(13, 13, B - 26, B - 26, 3);
+      const cx5 = B / 2, cy5 = B / 2, r5 = 10;
+      g.fillStyle(0xff99cc);
+      g.fillTriangle(cx5, cy5 - r5, cx5 + r5, cy5, cx5, cy5 + r5);
+      g.fillTriangle(cx5, cy5 - r5, cx5 - r5, cy5, cx5, cy5 + r5);
+      g.lineStyle(2, 0xff44aa);
+      g.strokeRoundedRect(0, 0, B, B, 9);
     });
 
     // ── remote-player (player 2) cube — warm orange palette ──
@@ -444,6 +554,179 @@ export class GameScene extends Phaser.Scene {
       undefined,
       this
     );
+  }
+
+  // ── NPC bots ───────────────────────────────────────────────────────────────
+
+  /**
+   * Pre-compute a jump schedule for one NPC based on the LEVEL obstacle list.
+   * Each entry says "when my x reaches atX, trigger a jump".
+   * With mistakeRate probability the jump is simply omitted (the NPC will die).
+   */
+  private computeJumpSchedule(jumpDistance: number, mistakeRate: number): NpcJumpEvent[] {
+    const schedule: NpcJumpEvent[] = [];
+    for (const [wx] of LEVEL) {
+      if (Math.random() < mistakeRate) continue; // intentional miss
+      // Add slight per-obstacle random variance (±20 px) so bots don't sync perfectly
+      const variance = (Math.random() - 0.5) * 40;
+      schedule.push({ atX: wx - jumpDistance + variance });
+    }
+    return schedule;
+  }
+
+  private buildNpcs(): void {
+    // In online mode the remote human fills one slot → 2 NPCs; solo → 3 NPCs
+    const configs = this.isMultiplayer
+      ? NPC_CONFIGS.slice(0, 2)
+      : NPC_CONFIGS;
+
+    for (const cfg of configs) {
+      const img = this.physics.add
+        .image(200, GROUND_TOP - B / 2 - 2, cfg.textureKey)
+        .setDepth(8).setAlpha(0.92);
+
+      const body = img.body as Phaser.Physics.Arcade.Body;
+      body.setSize(B - 8, B - 8);
+      body.setCollideWorldBounds(false);
+      body.setMaxVelocity(800, 1400);
+
+      // Ground collision
+      this.physics.add.collider(img, this.groundStatic);
+
+      // Block platforms (land on top safely, lethal on side)
+      this.physics.add.collider(img, this.platforms, () => {
+        const b = img.body as Phaser.Physics.Arcade.Body;
+        if (b.blocked.right || b.blocked.left) {
+          const npc = this.npcs.find(n => n.image === img);
+          if (npc) this.npcDeath(npc);
+        }
+      });
+
+      // Spikes — lethal on any overlap
+      this.physics.add.overlap(img, this.obstacles, () => {
+        const npc = this.npcs.find(n => n.image === img);
+        if (npc) this.npcDeath(npc);
+      });
+
+      // Brief idle bob at spawn (auto-stops once the cube starts moving)
+      this.tweens.add({
+        targets: img, y: GROUND_TOP - B / 2 - 2 - 5,
+        yoyo: true, repeat: 2, duration: 400, ease: 'Sine.easeInOut',
+      });
+
+      // Name label (world-space, follows cube in updateNpcs)
+      const nameTxt = this.add.text(200, GROUND_TOP - B - 14, cfg.name, {
+        fontSize: '13px', color: cfg.labelColor, fontFamily: 'Arial',
+        stroke: '#000033', strokeThickness: 3,
+      }).setDepth(11).setOrigin(0.5, 1);
+
+      this.npcs.push({
+        image:        img,
+        rotation:     0,
+        wasGrounded:  false,
+        jumpsLeft:    2,
+        alive:        true,
+        won:          false,
+        nameTxt,
+        deathTints:   [...cfg.deathTints],
+        jumpSchedule: this.computeJumpSchedule(cfg.jumpDistance, cfg.mistakeRate),
+        scheduleIdx:  0,
+        name:         cfg.name,
+      });
+    }
+  }
+
+  private updateNpcs(dt: number): void {
+    for (const npc of this.npcs) {
+      if (!npc.alive || npc.won) continue;
+
+      const body     = npc.image.body as Phaser.Physics.Arcade.Body;
+      const grounded = body.blocked.down;
+
+      // Auto-scroll same speed as player
+      body.setVelocityX(SPEED);
+
+      // ── rotation (mirrors player cube behaviour) ──
+      if (!grounded) {
+        npc.rotation += 6 * (dt / 16.67);
+      } else {
+        const snap = Math.round(npc.rotation / 90) * 90;
+        npc.rotation += (snap - npc.rotation) * 0.35;
+        if (!npc.wasGrounded) {
+          npc.jumpsLeft = 2; // refill on landing
+        }
+      }
+      npc.image.setAngle(npc.rotation);
+      npc.wasGrounded = grounded;
+
+      // ── jump schedule ──
+      while (npc.scheduleIdx < npc.jumpSchedule.length) {
+        const evt = npc.jumpSchedule[npc.scheduleIdx];
+        if (npc.image.x >= evt.atX) {
+          npc.scheduleIdx++;
+          if (npc.jumpsLeft > 0) {
+            npc.jumpsLeft--;
+            body.setVelocityY(JUMP_VEL);
+          }
+        } else {
+          break;
+        }
+      }
+
+      // ── name label follows cube ──
+      npc.nameTxt.setPosition(npc.image.x, npc.image.y - B / 2 - 6);
+
+      // ── fall-off check ──
+      if (npc.image.y > GAME_HEIGHT + 100) this.npcDeath(npc);
+
+      // ── win check ──
+      if (npc.image.x >= WORLD_W - 300) this.npcWin(npc);
+    }
+  }
+
+  private npcDeath(npc: NpcBot): void {
+    if (!npc.alive || npc.won) return;
+    npc.alive = false;
+
+    // Kill momentum so the image stays put
+    const body = npc.image.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(0, 0);
+    body.setGravityY(0);
+    body.setAcceleration(0, 0);
+
+    // Particle burst using the bot's colour palette
+    const fx = this.add.particles(npc.image.x, npc.image.y, 'pSquare', {
+      speed:    { min: 70, max: 380 },
+      angle:    { min: 0,  max: 360 },
+      scale:    { start: 1.0, end: 0 },
+      alpha:    { start: 1,   end: 0 },
+      lifespan: 600,
+      gravityY: 500,
+      tint:     npc.deathTints,
+      quantity: 16,
+      emitting: false,
+    }).setDepth(12);
+    fx.explode(16);
+    this.time.delayedCall(700, () => fx.destroy());
+
+    // Small shake + flash
+    this.cameras.main.shake(150, 0.005);
+
+    npc.image.setVisible(false);
+    npc.nameTxt.setText('✗ ' + npc.name);
+    npc.nameTxt.setStyle({ color: '#ff6644' });
+
+    // Floating notification
+    this.showFloatingNotif(`${npc.name} died! 💀`, '#ffaa44');
+  }
+
+  private npcWin(npc: NpcBot): void {
+    if (!npc.alive || npc.won) return;
+    npc.won   = true;
+    npc.alive = false;
+    npc.nameTxt.setText('🏆 ' + npc.name);
+    npc.nameTxt.setFontStyle('bold');
+    this.showFloatingNotif(`${npc.name} finished! 🏆`, '#ffcc44');
   }
 
   // ── high score & leaderboard ───────────────────────────────────────────────

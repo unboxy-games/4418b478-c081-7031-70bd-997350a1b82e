@@ -81,5 +81,20 @@
 - `UIPlugin` registered as a scene plugin (`mapping: 'rexUI'`) in main.ts
 - `rexUI!: any` declared on GameScene
 
+## NPC Bots (4-Player Mode)
+- Always 4 "players" in every race: the human + 3 NPC bots (solo) or human + remote human + 2 NPC bots (online)
+- **Bot personalities**:
+  - **Dash** (teal, cube3): aggressive — jumps 70 px before obstacles, 4% mistake rate
+  - **Blaze** (purple, cube4): balanced — jumps 100 px before, 7% mistake rate
+  - **Nova** (hot pink, cube5): cautious — jumps 130 px before, 10% mistake rate
+- Jump schedule pre-computed from LEVEL data: each obstacle gets a `jumpAtX` entry with ±20 px random variance; mistake rate % of jumps are simply omitted (bot dies on that obstacle)
+- NPCs share same physics (gravity, double-jump refill, ground/platform/spike colliders)
+- Spinning rotation + snap-to-90° on landing, same as player
+- Name label floats above each cube in world space, updates each frame in `updateNpcs()`
+- On death: coloured particle burst matching bot palette, camera mini-shake, "X died! 💀" toast, label turns red
+- On win: "🏆 Name" label, "Name finished! 🏆" toast
+- `isMultiplayer` is now read from registry BEFORE `buildNpcs()` so bot count is correct
+- `NpcBot` interface + `NPC_CONFIGS` array defined at module level above the class
+
 ## What Changed This Turn
-- Fixed camera drift after death: `onDeath()` now immediately zeros the physics body velocity, gravity override, and acceleration so the camera stops moving the instant the player dies
+- Added 3 NPC bots (Dash/Blaze/Nova) to always fill a 4-player race in both solo and online modes
