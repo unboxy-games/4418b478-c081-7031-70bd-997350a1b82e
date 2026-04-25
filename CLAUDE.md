@@ -32,10 +32,5 @@
 - `joinRoomById()` uses `rooms.joinById(roomId, ...)` and drives first render from `onStateChange` (same state-timing guard as joinOrCreate)
 
 ## Changes This Turn
-- Added **Browse Rooms** button to the main menu (between Join With Code and Quick Match)
-- Added `showRoomBrowser()` — renders a panel listing open rooms with CODE, HOST, player-count dots columns and per-row JOIN buttons
-- Added `refreshRoomList()` — fetches `unboxy.rooms.list()`, filters full rooms, renders up to 5 rows; updates status text if empty or on network error
-- Added `joinRoomById()` — stops the poll, clears the UI, calls `unboxy.rooms.joinById`, then enters the lobby waiting screen
-- Added `stopListPoll()` helper — removes the poll timer and destroys all room-browser row objects
-- `clearMain()` now calls `stopListPoll()` so the timer is always cleaned up on navigation
-- `createRoom()` and `quickMatch()` now pass `metadata: { hostName }` so the browser can display the creator's name
+- Fixed overlapping BLOKUS title: removed duplicate white base text; each letter is now its own colored Text object with a dark stroke, eliminating overlap
+- Letters still pulse individually (staggered alpha) and scale together as a group via tween

@@ -87,46 +87,50 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   private createTitle(): void {
-    const title = this.add.text(GAME_WIDTH / 2, 90, 'BLOKUS', {
-      fontSize: '72px',
-      fontStyle: 'bold',
-      color: '#ffffff',
-      stroke: '#1e3a5f',
-      strokeThickness: 6,
-      letterSpacing: 12,
-    }).setOrigin(0.5).setDepth(10);
-
     const subtitle = this.add.text(GAME_WIDTH / 2, 155, 'ONLINE MULTIPLAYER', {
       fontSize: '18px',
       color: '#64748b',
       letterSpacing: 6,
     }).setOrigin(0.5).setDepth(10);
 
-    // Pulse tween for title
-    this.tweens.add({
-      targets: title,
-      scaleX: 1.03, scaleY: 1.03,
-      yoyo: true, repeat: -1,
-      duration: 2500,
-      ease: 'Sine.easeInOut',
-    });
-
-    // Colored letter highlights
+    // Render each letter individually so colors never overlap a duplicate base text
     const colors = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#3b82f6', '#ef4444'];
     const letters = 'BLOKUS'.split('');
-    let lx = GAME_WIDTH / 2 - 180;
+    const letterObjs: Phaser.GameObjects.Text[] = [];
+
+    // Measure total width first using a temp text (destroyed immediately)
+    const letterW = 58; // approximate per-character width for 72px bold
+    const gap = 8;
+    const totalW = letters.length * letterW + (letters.length - 1) * gap;
+    const startX = GAME_WIDTH / 2 - totalW / 2 + letterW / 2;
+
     for (let i = 0; i < letters.length; i++) {
-      const lt = this.add.text(lx + i * 62, 88, letters[i], {
-        fontSize: '72px', fontStyle: 'bold', color: colors[i],
-      }).setOrigin(0.5).setAlpha(0.5).setDepth(11);
+      const lt = this.add.text(startX + i * (letterW + gap), 90, letters[i], {
+        fontSize: '72px',
+        fontStyle: 'bold',
+        color: colors[i],
+        stroke: '#0d1b2a',
+        strokeThickness: 6,
+      }).setOrigin(0.5).setDepth(10);
+      letterObjs.push(lt);
+
       this.tweens.add({
         targets: lt,
-        alpha: { from: 0.5, to: 0.85 },
+        alpha: { from: 0.8, to: 1 },
         yoyo: true, repeat: -1,
         duration: 1800 + i * 300,
         ease: 'Sine.easeInOut',
       });
     }
+
+    // Pulse the whole title group
+    this.tweens.add({
+      targets: letterObjs,
+      scaleX: 1.03, scaleY: 1.03,
+      yoyo: true, repeat: -1,
+      duration: 2500,
+      ease: 'Sine.easeInOut',
+    });
 
     void subtitle;
   }
