@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 import { unboxyReady } from '../main';
-import { PLAYER_COLORS, PLAYER_NAMES } from '../data/pieces';
+import { ALL_PIECE_NAMES, PLAYER_COLORS, PLAYER_NAMES } from '../data/pieces';
 import { setActiveRoom } from '../gameState';
 
 function randomCode(): string {
@@ -648,10 +648,20 @@ export class LobbyScene extends Phaser.Scene {
       idx++;
     });
 
-    // Waiting message
-    if (idx < 2) {
-      const waiting = this.add.text(cx, 350 + idx * 42 + 10, 'Waiting for more players...', {
-        fontSize: '16px', color: '#475569',
+    // Show NPC bot placeholders for unfilled slots
+    for (let npcSlot = idx; npcSlot < 4; npcSlot++) {
+      const npcColor = PLAYER_COLORS[npcSlot];
+      const npcRow = this.add.text(cx, 350 + npcSlot * 42, `${PLAYER_NAMES[npcSlot]}: 🤖 NPC Bot`, {
+        fontSize: '20px',
+        color: '#' + npcColor.toString(16).padStart(6, '0'),
+        alpha: 0.45,
+      } as any).setOrigin(0.5).setDepth(10).setAlpha(0.45);
+      this.playerListTexts.push(npcRow);
+    }
+
+    if (idx < 4) {
+      const waiting = this.add.text(cx, 350 + 4 * 42 + 4, 'NPC bots will fill empty slots', {
+        fontSize: '14px', color: '#475569',
       }).setOrigin(0.5).setDepth(10);
       this.playerListTexts.push(waiting);
     }
@@ -661,7 +671,8 @@ export class LobbyScene extends Phaser.Scene {
     // Guard: state.players is undefined until the first onStateChange fires
     if (!this.startBtn || !this.room?.state?.players) return;
     const playerCount = this.room.state.players.size;
-    const canStart = playerCount >= 2;
+    // Allow starting with just 1 real player — NPC bots fill the rest up to 4
+    const canStart = playerCount >= 1;
 
     if (this.isHost) {
       this.startBtn.setVisible(true).setAlpha(canStart ? 1 : 0.4);
@@ -676,26 +687,32 @@ export class LobbyScene extends Phaser.Scene {
 
   private async startGame(): Promise<void> {
     if (!this.room?.state?.players) return;
-    const playerCount = Math.min(this.room.state.players.size, 4);
-    if (playerCount < 2) return;
+    const humanCount = Math.min(this.room.state.players.size, 4);
+    if (humanCount < 1) return;
 
-    // Build player order from current room members
+    // Build player order from real connected players (may be fewer than 4)
     const order: string[] = [];
     this.room.state.players.forEach((_p: any, sid: string) => {
       if (order.length < 4) order.push(sid);
     });
 
+    // Always play a full 4-player game — NPC bots fill any empty slots
+    const TOTAL = 4;
+
     // Initialize game state in room.data
     await this.room.data.set('gamePhase', 'playing');
-    await this.room.data.set('playerOrder', order);
+    await this.room.data.set('playerOrder', order);          // only real player sids
+    await this.room.data.set('humanPlayerCount', humanCount); // so clients know NPC boundary
     await this.room.data.set('board', new Array(400).fill(-1));
     await this.room.data.set('currentTurn', 0);
-    await this.room.data.set('firstMove', new Array(playerCount).fill(true));
-    await this.room.data.set('scores', new Array(playerCount).fill(0));
-    await this.room.data.set('playerCount', playerCount);
+    await this.room.data.set('firstMove', new Array(TOTAL).fill(true));
+    await this.room.data.set('scores', new Array(TOTAL).fill(0));
+    await this.room.data.set('playerCount', TOTAL);
 
-    // Set each player's initial pieces (must be done for all known players by host)
-    // Each player sets their own pieces when GameScene starts
+    // Pre-seed full piece sets for every NPC slot so clients can sync them
+    for (let i = humanCount; i < TOTAL; i++) {
+      await this.room.data.set('npcPieces_' + i, [...ALL_PIECE_NAMES]);
+    }
   }
 
   private launchGame(): void {
@@ -703,8 +720,9 @@ export class LobbyScene extends Phaser.Scene {
     const order = this.room.data.get('playerOrder') as string[] | undefined;
     if (!order) return;
     const myIdx = order.indexOf(this.room.sessionId);
+    const humanCount = (this.room.data.get('humanPlayerCount') as number | undefined) ?? order.length;
 
-    setActiveRoom(this.room, myIdx >= 0 ? myIdx : 0, order);
+    setActiveRoom(this.room, myIdx >= 0 ? myIdx : 0, order, false, this.isHost, humanCount);
     this.inputActive = false;
     this.unsubs.forEach(f => f());
     this.unsubs = [];
@@ -712,8 +730,8 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   private startOffline(): void {
-    // Create a mock offline room
-    setActiveRoom(null, 0, [], true);
+    // 1 human (index 0) + 3 NPC bots (indices 1–3)
+    setActiveRoom(null, 0, [], true, true, 1);
     this.scene.start('GameScene');
   }
 

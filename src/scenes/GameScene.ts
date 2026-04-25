@@ -8,7 +8,7 @@ import {
   PLAYER_COLORS, PLAYER_COLORS_DARK, PLAYER_NAMES, PLAYER_CORNERS,
   canPlacePiece, getPieceCells, countRemainingCells, hasValidMove,
 } from '../data/pieces';
-import { activeRoom, myPlayerIndex, playerOrder, isOfflineMode, setActiveRoom } from '../gameState';
+import { activeRoom, myPlayerIndex, playerOrder, isOfflineMode, isHost as roomIsHost, humanPlayerCount as roomHumanPlayerCount, setActiveRoom } from '../gameState';
 
 // ─── Offline AI stub ──────────────────────────────────────────────────────────
 function offlineFindMove(
@@ -54,6 +54,12 @@ export class GameScene extends Phaser.Scene {
   // myPlayerIndex cached
   private myIdx = 0;
   private myOrder: string[] = [];
+  /** True when this client created the room (responsible for running NPC AI online). */
+  private isHost = false;
+  /** How many slots are real humans; indices >= this are NPC bots. */
+  private humanPlayerCount = 1;
+  /** Guards against scheduling multiple overlapping AI move timers. */
+  private aiMoveScheduled = false;
 
   // Interaction
   private selectedPiece: string | null = null;
@@ -99,6 +105,8 @@ export class GameScene extends Phaser.Scene {
     this.room = activeRoom;
     this.myIdx = myPlayerIndex;
     this.myOrder = [...playerOrder];
+    this.isHost = roomIsHost;
+    this.humanPlayerCount = roomHumanPlayerCount;
 
     // Initialize state
     if (this.room) {
@@ -135,7 +143,8 @@ export class GameScene extends Phaser.Scene {
   // ─── Init ──────────────────────────────────────────────────────────────────
 
   private initOfflineGame(): void {
-    this.playerCount = 2;
+    this.playerCount = 4; // always a full 4-player game; bots fill slots 1–3
+    this.humanPlayerCount = 1;
     this.board = new Array(400).fill(-1);
     this.currentTurn = 0;
     this.firstMove = [true, true, true, true];
@@ -146,10 +155,7 @@ export class GameScene extends Phaser.Scene {
       this.playerPieces[i] = [...ALL_PIECE_NAMES];
     }
     this.myIdx = 0;
-    // In offline mode, only player 0 is human; schedule AI for player 1
-    if (isOfflineMode && this.currentTurn !== this.myIdx) {
-      this.scheduleAIMove();
-    }
+    // Turn 0 is the human; no AI needed yet
   }
 
   private syncFromRoom(): void {
@@ -157,21 +163,24 @@ export class GameScene extends Phaser.Scene {
     const board = this.room.data.get('board') as number[] | undefined;
     if (board) this.board = [...board];
     this.currentTurn = (this.room.data.get('currentTurn') as number | undefined) ?? 0;
-    this.playerCount = (this.room.data.get('playerCount') as number | undefined) ?? 2;
+    this.playerCount = (this.room.data.get('playerCount') as number | undefined) ?? 4;
+    this.humanPlayerCount = (this.room.data.get('humanPlayerCount') as number | undefined) ?? this.myOrder.length;
     const fm = this.room.data.get('firstMove') as boolean[] | undefined;
     if (fm) this.firstMove = [...fm];
     const sc = this.room.data.get('scores') as number[] | undefined;
     if (sc) this.scores = [...sc];
     this.gamePhase = ((this.room.data.get('gamePhase') as string) === 'gameover') ? 'gameover' : 'playing';
 
-    // Sync pieces from room.player state
+    // Sync pieces: real human slots from room.player state, NPC slots from room.data
     for (let i = 0; i < this.playerCount; i++) {
       const sid = this.myOrder[i];
       if (sid) {
         const pieces = this.room.player.get(sid, 'pieces') as string[] | undefined;
         this.playerPieces[i] = pieces ? [...pieces] : [...ALL_PIECE_NAMES];
       } else {
-        this.playerPieces[i] = [...ALL_PIECE_NAMES];
+        // NPC slot — host writes these to room.data as 'npcPieces_N'
+        const pieces = this.room.data.get('npcPieces_' + i) as string[] | undefined;
+        this.playerPieces[i] = pieces !== undefined ? [...pieces] : [...ALL_PIECE_NAMES];
       }
     }
   }
@@ -184,6 +193,10 @@ export class GameScene extends Phaser.Scene {
       this.syncFromRoom();
       this.renderAll();
       if (this.gamePhase === 'gameover') this.showGameOver();
+      // If it's an NPC turn and we're the host, drive the bot
+      if (this.isHost && this.isNPCPlayer(this.currentTurn) && this.gamePhase === 'playing') {
+        this.scheduleAIMove();
+      }
     });
     this.unsubs.push(unsub);
   }
@@ -755,7 +768,7 @@ export class GameScene extends Phaser.Scene {
     if (allSkipped) {
       this.gamePhase = 'gameover';
       this.showGameOver();
-    } else if (isOfflineMode && this.currentTurn !== this.myIdx) {
+    } else if (this.isNPCPlayer(this.currentTurn)) {
       this.scheduleAIMove();
     }
   }
@@ -805,39 +818,51 @@ export class GameScene extends Phaser.Scene {
 
     this.renderAll();
 
-    if (isOfflineMode && this.currentTurn !== this.myIdx) {
+    if (this.isNPCPlayer(this.currentTurn)) {
       this.scheduleAIMove();
     }
   }
 
-  // ─── Offline AI ────────────────────────────────────────────────────────────
+  // ─── NPC Bot AI (offline + online host) ───────────────────────────────────
+
+  /** True when slot `idx` belongs to a bot (no real human). */
+  private isNPCPlayer(idx: number): boolean {
+    if (isOfflineMode) return idx >= this.humanPlayerCount; // slots 1–3 are bots
+    return !this.myOrder[idx]; // online: no session ID = bot slot
+  }
 
   private scheduleAIMove(): void {
-    if (!isOfflineMode || this.gamePhase !== 'playing') return;
-    if (this.currentTurn === this.myIdx) return;
+    if (this.gamePhase !== 'playing') return;
+    if (!this.isNPCPlayer(this.currentTurn)) return;
+    // In online mode only the host drives bots so everyone else just waits for the sync
+    if (this.room && !this.isHost) return;
+    // Guard: don't stack multiple timers for the same turn
+    if (this.aiMoveScheduled) return;
+    this.aiMoveScheduled = true;
 
-    this.time.delayedCall(800, () => {
-      if (this.gamePhase !== 'playing' || this.currentTurn === this.myIdx) return;
+    this.time.delayedCall(700, () => {
+      this.aiMoveScheduled = false;
+      if (this.gamePhase !== 'playing' || !this.isNPCPlayer(this.currentTurn)) return;
 
       const aiIdx = this.currentTurn;
-      const aiPieces = this.playerPieces[aiIdx] ?? [];
+      const aiPieces = [...(this.playerPieces[aiIdx] ?? [])];
       const isFirst = this.firstMove[aiIdx] ?? true;
       const move = offlineFindMove(this.board, aiPieces, aiIdx, isFirst);
 
       if (move) {
-        // Apply AI move
+        // Apply the NPC move to the shared board
         const cells = getPieceCells(move.pieceName, move.orientation, move.bx, move.by);
         for (const [x, y] of cells) {
           this.board[y * 20 + x] = aiIdx;
         }
         this.scores[aiIdx] = (this.scores[aiIdx] ?? 0) + cells.length;
-        const idx2 = aiPieces.indexOf(move.pieceName);
-        if (idx2 !== -1) aiPieces.splice(idx2, 1);
+        const pieceIdx = aiPieces.indexOf(move.pieceName);
+        if (pieceIdx !== -1) aiPieces.splice(pieceIdx, 1);
         this.playerPieces[aiIdx] = aiPieces;
         this.firstMove[aiIdx] = false;
         this.skippedInRow[aiIdx] = 0;
 
-        // Particles for AI
+        // Particles
         const cx = cells.reduce((s, c) => s + c[0], 0) / cells.length;
         const cy = cells.reduce((s, c) => s + c[1], 0) / cells.length;
         this.spawnParticles(
@@ -851,14 +876,26 @@ export class GameScene extends Phaser.Scene {
 
       const nextTurn = this.computeNextTurn();
       this.currentTurn = nextTurn;
-
       const allDone = this.checkGameOver();
+
+      // Broadcast the NPC move to all clients via room.data (online host only)
+      if (this.room) {
+        this.room.data.set('board', [...this.board]);
+        this.room.data.set('currentTurn', this.currentTurn);
+        this.room.data.set('firstMove', [...this.firstMove]);
+        this.room.data.set('scores', [...this.scores]);
+        // Persist NPC pieces so other clients can read them on sync
+        this.room.data.set('npcPieces_' + aiIdx, [...(this.playerPieces[aiIdx] ?? [])]);
+        if (allDone) this.room.data.set('gamePhase', 'gameover');
+      }
+
       this.renderAll();
 
       if (allDone) {
         this.gamePhase = 'gameover';
         this.showGameOver();
-      } else if (this.currentTurn !== this.myIdx) {
+      } else if (this.isNPCPlayer(this.currentTurn)) {
+        // Chain: next turn is also a bot — schedule again
         this.scheduleAIMove();
       }
     });
@@ -881,9 +918,10 @@ export class GameScene extends Phaser.Scene {
     if (this.gamePhase === 'gameover') {
       this.turnText.setText('GAME OVER').setColor('#f59e0b');
     } else {
+      const npcTurn = this.isNPCPlayer(this.currentTurn);
       this.turnText
-        .setText(myTurn ? '▶ YOUR TURN' : `${pName}'s turn`)
-        .setColor(myTurn ? '#22c55e' : '#94a3b8');
+        .setText(myTurn ? '▶ YOUR TURN' : `${pName}${npcTurn ? ' 🤖' : ''}'s turn`)
+        .setColor(myTurn ? '#22c55e' : npcTurn ? '#f59e0b' : '#94a3b8');
     }
     if (myTurn && this.gamePhase === 'playing') {
       this.tweens.add({

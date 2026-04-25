@@ -32,6 +32,16 @@
 - `joinRoomById()` uses `rooms.joinById(roomId, ...)` and drives first render from `onStateChange` (same state-timing guard as joinOrCreate)
 
 ## Changes This Turn
+- Added NPC bots to always fill a full 4-player game:
+  - Offline: player 0 = human, players 1–3 = bots (changed from 2-player to 4-player)
+  - Online: host always starts a 4-player game; any slots beyond real connected players are NPC bots; host runs AI for NPC turns and broadcasts moves via `room.data`; non-host clients just render the synced state
+  - `isHost` and `humanPlayerCount` added to `gameState.ts` and passed through `setActiveRoom`
+  - `isNPCPlayer(idx)` helper: offline = idx ≥ humanPlayerCount; online = no session ID for that slot
+  - `aiMoveScheduled` flag prevents stacked timers
+  - Lobby: NPC bot slots shown as dimmed placeholder rows; host can start with ≥1 real player
+  - HUD shows 🤖 emoji and amber colour for bot turns
+
+## Previous Changes
 - Overhauled touch/iPad board interaction:
   - `navigator.maxTouchPoints > 0` detected once at startup — no flaky per-event type checks
   - **Touch flow**: drag finger across board to move preview in real-time (pointermove fires during touch drag). Tap to set a position, or drag to reposition. Preview stays sticky after finger lifts. Piece is placed only via the **✓ PLACE PIECE** button. User can freely rotate/flip and retap/redrag to reposition before confirming.
