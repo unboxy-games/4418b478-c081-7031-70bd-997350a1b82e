@@ -79,6 +79,12 @@ export class GameScene extends Phaser.Scene {
   private flipBtnGfx!: Phaser.GameObjects.Graphics;
   private passBtnGfx!: Phaser.GameObjects.Graphics;
 
+  // Touch-confirm placement button
+  private placeBtnGfx!: Phaser.GameObjects.Graphics;
+  private placeBtnTxt!: Phaser.GameObjects.Text;
+  private placeBtnZone!: Phaser.GameObjects.Zone;
+  private readonly PLACE_BTN = { x: 0, y: 0, w: 0, h: 0 };
+
   // Particles
   private emitter!: Phaser.GameObjects.Particles.ParticleEmitter;
 
@@ -97,6 +103,9 @@ export class GameScene extends Phaser.Scene {
     } else {
       this.initOfflineGame();
     }
+
+    // Enable multi-touch (joystick + board interaction, or two-finger pinch)
+    this.input.addPointer(2);
 
     this.buildBackground();
     this.buildBoardGraphics();
@@ -304,6 +313,9 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(2, valid ? 0xffffff : 0xff0000, 0.9);
       g.strokeRect(wx + 1, wy + 1, CELL - 2, CELL - 2);
     }
+
+    // Keep the PLACE button in sync with the current preview validity
+    this.updatePlaceBtn();
   }
 
   // ─── Panel ─────────────────────────────────────────────────────────────────
@@ -458,30 +470,71 @@ export class GameScene extends Phaser.Scene {
   // ─── Controls ──────────────────────────────────────────────────────────────
 
   private buildControls(): void {
-    const btnY = BOARD_ORIG_Y + BOARD_PX + 22;
-    const bw = 120, bh = 38;
+    // Taller buttons (48px) for comfortable touch targets on iPad
+    const btnY = BOARD_ORIG_Y + BOARD_PX + 11;
+    const bh = 48;
+    const bx = BOARD_ORIG_X + 5;
 
-    this.rotateBtnGfx = this.makeControlBtn(
-      BOARD_ORIG_X + 20, btnY, bw, bh, 'ROTATE (R)', 0x3b82f6,
-      () => this.rotatePiece()
-    );
-    this.flipBtnGfx = this.makeControlBtn(
-      BOARD_ORIG_X + 150, btnY, bw, bh, 'FLIP (F)', 0x8b5cf6,
-      () => this.flipPiece()
-    );
-    this.passBtnGfx = this.makeControlBtn(
-      BOARD_ORIG_X + 280, btnY, bw, bh, 'PASS', 0x64748b,
-      () => this.passTurn()
-    );
+    this.rotateBtnGfx = this.makeControlBtn(bx,       btnY, 100, bh, 'ROTATE (R)', 0x3b82f6, () => this.rotatePiece());
+    this.flipBtnGfx   = this.makeControlBtn(bx + 108,  btnY, 100, bh, 'FLIP (F)',   0x8b5cf6, () => this.flipPiece());
+    this.passBtnGfx   = this.makeControlBtn(bx + 216,  btnY,  90, bh, 'PASS',       0x64748b, () => this.passTurn());
+
+    // PLACE button — appears when a valid preview is active (essential for touch)
+    const pb = { x: bx + 314, y: btnY, w: 198, h: bh };
+    Object.assign(this.PLACE_BTN, pb);
+    this.placeBtnGfx = this.add.graphics().setDepth(10);
+    this.placeBtnTxt = this.add.text(pb.x + pb.w / 2, pb.y + pb.h / 2, '✓  PLACE PIECE', {
+      fontSize: '15px', fontStyle: 'bold', color: '#ffffff', align: 'center',
+    }).setOrigin(0.5).setDepth(11);
+    this.placeBtnZone = this.add.zone(pb.x + pb.w / 2, pb.y + pb.h / 2, pb.w, pb.h)
+      .setDepth(12).setInteractive();
+    this.placeBtnZone.on('pointerdown', () => {
+      if (this.hoverTile) this.handleBoardClick(this.hoverTile.x, this.hoverTile.y);
+    });
+    this.updatePlaceBtn();
 
     // Keyboard shortcuts
-    const rKey = this.input.keyboard?.addKey('R');
-    const fKey = this.input.keyboard?.addKey('F');
+    const rKey   = this.input.keyboard?.addKey('R');
+    const fKey   = this.input.keyboard?.addKey('F');
     const escKey = this.input.keyboard?.addKey('ESC');
 
     rKey?.on('down', () => this.rotatePiece());
     fKey?.on('down', () => this.flipPiece());
     escKey?.on('down', () => this.deselectPiece());
+  }
+
+  /** Show/hide the PLACE button and colour it based on whether the current preview is valid. */
+  private updatePlaceBtn(): void {
+    if (!this.placeBtnGfx) return;
+
+    const myTurn = this.currentTurn === this.myIdx;
+    const canShow = !!this.selectedPiece && this.gamePhase === 'playing' && myTurn;
+
+    let valid = false;
+    if (canShow && this.hoverTile) {
+      const cells = getPieceCells(this.selectedPiece!, this.selectedOriIdx, this.hoverTile.x, this.hoverTile.y);
+      valid = canPlacePiece(this.board, cells, this.myIdx, this.firstMove[this.myIdx] ?? true);
+    }
+
+    const show = canShow;
+    this.placeBtnGfx.setVisible(show);
+    this.placeBtnTxt.setVisible(show);
+    this.placeBtnZone.setVisible(show);
+
+    const { x, y, w, h } = this.PLACE_BTN;
+    this.placeBtnGfx.clear();
+    if (!show) return;
+
+    const color = (canShow && this.hoverTile && valid) ? 0x22c55e : 0x374151;
+    const alpha = (canShow && this.hoverTile && valid) ? 0.4 : 0.15;
+    this.placeBtnGfx.fillStyle(color, alpha);
+    this.placeBtnGfx.fillRoundedRect(x, y, w, h, 10);
+    this.placeBtnGfx.lineStyle(2, color, (canShow && this.hoverTile && valid) ? 1 : 0.3);
+    this.placeBtnGfx.strokeRoundedRect(x, y, w, h, 10);
+    this.placeBtnTxt.setColor((canShow && this.hoverTile && valid) ? '#22c55e' : '#64748b');
+    if (this.placeBtnZone.input) {
+      this.placeBtnZone.input.enabled = !!(canShow && this.hoverTile && valid);
+    }
   }
 
   private makeControlBtn(
@@ -522,6 +575,7 @@ export class GameScene extends Phaser.Scene {
       BOARD_PX, BOARD_PX
     ).setInteractive().setDepth(4);
 
+    // Mouse hover — updates preview continuously
     boardZone.on('pointermove', (ptr: Phaser.Input.Pointer) => {
       const tx = Math.floor((ptr.x - BOARD_ORIG_X) / CELL);
       const ty = Math.floor((ptr.y - BOARD_ORIG_Y) / CELL);
@@ -529,15 +583,31 @@ export class GameScene extends Phaser.Scene {
       this.renderPreview();
     });
 
-    boardZone.on('pointerout', () => {
-      this.hoverTile = null;
-      this.previewGfx.clear();
+    // Mouse leaves board — clear preview (keep for touch: user needs to see it to press PLACE)
+    boardZone.on('pointerout', (ptr: Phaser.Input.Pointer) => {
+      // Only clear on mouse pointer (id 0/1 on desktop); touch pointers keep the preview
+      if ((ptr.event as PointerEvent).pointerType !== 'touch') {
+        this.hoverTile = null;
+        this.previewGfx.clear();
+        this.updatePlaceBtn();
+      }
     });
 
+    // Tap / click on board
+    // • Mouse: pointermove already set hoverTile, so this fires a placement immediately.
+    // • Touch: no prior hover — first tap shows preview, second tap on same tile places.
     boardZone.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
       const tx = Math.floor((ptr.x - BOARD_ORIG_X) / CELL);
       const ty = Math.floor((ptr.y - BOARD_ORIG_Y) / CELL);
-      this.handleBoardClick(tx, ty);
+
+      if (this.hoverTile && this.hoverTile.x === tx && this.hoverTile.y === ty) {
+        // Already previewing this exact tile → confirm placement
+        this.handleBoardClick(tx, ty);
+      } else {
+        // New tile (first touch or mouse entered from outside) → show preview first
+        this.hoverTile = { x: tx, y: ty };
+        this.renderPreview();
+      }
     });
   }
 
@@ -581,8 +651,10 @@ export class GameScene extends Phaser.Scene {
   private deselectPiece(): void {
     this.selectedPiece = null;
     this.selectedOriIdx = 0;
+    this.hoverTile = null;
     this.refreshThumbnails();
     this.previewGfx.clear();
+    this.updatePlaceBtn();
   }
 
   private rotatePiece(): void {
@@ -788,6 +860,7 @@ export class GameScene extends Phaser.Scene {
     this.renderPreview();
     this.renderHUD();
     this.refreshThumbnails();
+    this.updatePlaceBtn();
   }
 
   private renderHUD(): void {

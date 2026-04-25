@@ -32,5 +32,9 @@
 - `joinRoomById()` uses `rooms.joinById(roomId, ...)` and drives first render from `onStateChange` (same state-timing guard as joinOrCreate)
 
 ## Changes This Turn
-- Fixed overlapping BLOKUS title: removed duplicate white base text; each letter is now its own colored Text object with a dark stroke, eliminating overlap
-- Letters still pulse individually (staggered alpha) and scale together as a group via tween
+- Added full iPad / touch-screen support:
+  - `this.input.addPointer(2)` enables multi-touch (up to 3 concurrent pointers)
+  - Board now uses **two-tap placement**: first tap shows piece preview, second tap on the same cell confirms placement. Mouse users are unaffected (pointermove pre-fills hoverTile so single-click still places immediately)
+  - Touch `pointerout` no longer clears the preview, so users can tap PLACE PIECE after moving their finger off the board
+  - Control buttons (ROTATE, FLIP, PASS) height increased from 38px to 48px for comfortable finger targets
+  - Added a **✓ PLACE PIECE** confirm button (198×48px, green when valid, grey when not) that appears whenever a piece is selected — tapping it confirms the previewed placement without needing to double-tap the board
