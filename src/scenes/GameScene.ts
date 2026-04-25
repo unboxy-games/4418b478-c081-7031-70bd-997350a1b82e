@@ -59,6 +59,9 @@ export class GameScene extends Phaser.Scene {
   private selectedPiece: string | null = null;
   private selectedOriIdx = 0;
   private hoverTile: { x: number; y: number } | null = null;
+  // True when the device supports touch (iPad, phone, touch-screen laptop).
+  // Detected once at startup via the Web API — no flaky per-event checks needed.
+  private readonly isTouchDevice: boolean = navigator.maxTouchPoints > 0;
 
   // Graphics
   private boardBgGfx!: Phaser.GameObjects.Graphics;
@@ -575,38 +578,44 @@ export class GameScene extends Phaser.Scene {
       BOARD_PX, BOARD_PX
     ).setInteractive().setDepth(4);
 
-    // Mouse hover — updates preview continuously
+    // ── Mouse: hover moves the preview continuously ──────────────────────────
     boardZone.on('pointermove', (ptr: Phaser.Input.Pointer) => {
+      if (this.isTouchDevice) return; // touch devices have no cursor; skip
       const tx = Math.floor((ptr.x - BOARD_ORIG_X) / CELL);
       const ty = Math.floor((ptr.y - BOARD_ORIG_Y) / CELL);
       this.hoverTile = { x: tx, y: ty };
       this.renderPreview();
     });
 
-    // Mouse leaves board — clear preview (keep for touch: user needs to see it to press PLACE)
-    boardZone.on('pointerout', (ptr: Phaser.Input.Pointer) => {
-      // Only clear on mouse pointer (id 0/1 on desktop); touch pointers keep the preview
-      if ((ptr.event as PointerEvent).pointerType !== 'touch') {
-        this.hoverTile = null;
-        this.previewGfx.clear();
-        this.updatePlaceBtn();
-      }
+    // ── Mouse: leaving the board clears the preview ──────────────────────────
+    boardZone.on('pointerout', () => {
+      if (this.isTouchDevice) return; // on touch, preview must stay so user can press PLACE
+      this.hoverTile = null;
+      this.previewGfx.clear();
+      this.updatePlaceBtn();
     });
 
-    // Tap / click on board
-    // • Mouse: pointermove already set hoverTile, so this fires a placement immediately.
-    // • Touch: no prior hover — first tap shows preview, second tap on same tile places.
+    // ── Tap / click on board ─────────────────────────────────────────────────
     boardZone.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
       const tx = Math.floor((ptr.x - BOARD_ORIG_X) / CELL);
       const ty = Math.floor((ptr.y - BOARD_ORIG_Y) / CELL);
 
-      if (this.hoverTile && this.hoverTile.x === tx && this.hoverTile.y === ty) {
-        // Already previewing this exact tile → confirm placement
-        this.handleBoardClick(tx, ty);
-      } else {
-        // New tile (first touch or mouse entered from outside) → show preview first
+      if (this.isTouchDevice) {
+        // Touch flow: every tap just repositions the preview (sticky).
+        // Placement is confirmed only via the PLACE PIECE button.
+        // This lets the user lift their finger, rotate/flip, then press PLACE.
         this.hoverTile = { x: tx, y: ty };
         this.renderPreview();
+      } else {
+        // Mouse flow: pointermove already set hoverTile to this tile, so the
+        // same-tile check is always true and placement fires immediately on click.
+        // Clicking a different tile first-time just updates the preview.
+        if (this.hoverTile && this.hoverTile.x === tx && this.hoverTile.y === ty) {
+          this.handleBoardClick(tx, ty);
+        } else {
+          this.hoverTile = { x: tx, y: ty };
+          this.renderPreview();
+        }
       }
     });
   }

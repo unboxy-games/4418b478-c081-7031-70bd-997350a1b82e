@@ -32,9 +32,10 @@
 - `joinRoomById()` uses `rooms.joinById(roomId, ...)` and drives first render from `onStateChange` (same state-timing guard as joinOrCreate)
 
 ## Changes This Turn
-- Added full iPad / touch-screen support:
-  - `this.input.addPointer(2)` enables multi-touch (up to 3 concurrent pointers)
-  - Board now uses **two-tap placement**: first tap shows piece preview, second tap on the same cell confirms placement. Mouse users are unaffected (pointermove pre-fills hoverTile so single-click still places immediately)
-  - Touch `pointerout` no longer clears the preview, so users can tap PLACE PIECE after moving their finger off the board
-  - Control buttons (ROTATE, FLIP, PASS) height increased from 38px to 48px for comfortable finger targets
-  - Added a **✓ PLACE PIECE** confirm button (198×48px, green when valid, grey when not) that appears whenever a piece is selected — tapping it confirms the previewed placement without needing to double-tap the board
+- Overhauled touch/iPad board interaction:
+  - `navigator.maxTouchPoints > 0` detected once at startup — no flaky per-event type checks
+  - **Touch flow**: every board tap repositions the preview (sticky — preview stays after finger lifts). Piece is placed only via the **✓ PLACE PIECE** button. User can freely rotate/flip and retap to reposition before confirming.
+  - **Mouse flow**: hover moves preview, click places immediately (unchanged from original).
+  - `pointerout` clears preview on mouse only; on touch devices the preview is never cleared by pointer leaving the zone.
+  - `this.input.addPointer(2)` enables up to 3 concurrent touch pointers.
+  - Control buttons (ROTATE, FLIP, PASS) height 48px; PLACE PIECE button 198×48px, green=valid / grey=invalid.
