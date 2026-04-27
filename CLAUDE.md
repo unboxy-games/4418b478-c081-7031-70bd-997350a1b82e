@@ -37,13 +37,15 @@
   - Uses `room.chat.send` / `room.chat.onMessage` (SDK chat helper, not raw `room.send`)
   - Message log: pool of 14 Phaser Text objects, newest message at bottom, muted blue for user messages, darker grey for system messages
   - System join/leave messages automatically displayed (from `msg.kind === 'system.joined'/'system.left'`)
-  - Input box with placeholder text, blinking cursor when focused (530ms blink), geometry mask prevents overflow
-  - Click input box to focus; click anywhere else or press ESC to unfocus
-  - Enter key or SEND button sends the message; Backspace to edit
-  - R/F/ESC game shortcuts are blocked when chat is focused
-  - `MAX_CHAT_TEXT_LEN` (500) imported from SDK and used as input cap
-  - `offChat` unsubscribe stored in `unsubs`; `chatCursorTimer` removed on scene shutdown
-  - Chat panel is only rendered in online mode (`if (this.room) buildChatPanel()`)
+  - **Input is a real HTML `<input>` element** overlaid on the canvas (`position:fixed`, `getBoundingClientRect()` for precise placement) — supports CJK IMEs, iOS/Android soft keyboard
+  - Input is transparent (no background/border) and floats over the Phaser-drawn input box graphic
+  - `autocorrect/autocapitalize="off"`, `inputmode="text"`, `enterkeyhint="send"` for correct mobile/iPad behaviour
+  - `maxLength = MAX_CHAT_TEXT_LEN` (500) mirrors the SDK cap
+  - `focus`/`blur` events on the HTML input drive the Phaser background visual state (blue border when active)
+  - Enter key (or SEND button) sends; ESC blurs the input; R/F shortcuts blocked via `chatFocused` guard
+  - Resize handler (`window.addEventListener('resize', ...)`) keeps input position locked to the canvas on window resize
+  - HTML element removed and resize handler unregistered on scene shutdown
+  - Chat panel only rendered in online mode (`if (this.room) buildChatPanel()`)
 
 ## Previous Changes (bot difficulty)
 - Added bot difficulty selector (Easy / Medium / Hard):

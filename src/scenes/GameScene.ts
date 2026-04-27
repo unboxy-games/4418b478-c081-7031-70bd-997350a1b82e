@@ -213,12 +213,12 @@ export class GameScene extends Phaser.Scene {
   private chatMsgPool: Phaser.GameObjects.Text[] = [];
   private chatMessages: Array<{ text: string; isSystem: boolean }> = [];
   private readonly MAX_CHAT_VISIBLE = 14;
-  private chatInputStr = '';
-  private chatInputTextObj?: Phaser.GameObjects.Text;
   private chatInputBgGfx?: Phaser.GameObjects.Graphics;
   private chatFocused = false;
-  private chatCursorVisible = true;
-  private chatCursorTimer?: Phaser.Time.TimerEvent;
+  /** The real <input> element overlaid on the canvas for IME / soft-keyboard support. */
+  private chatInputEl?: HTMLInputElement;
+  /** Bound resize handler so it can be removed on shutdown. */
+  private chatResizeHandler?: () => void;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -261,7 +261,9 @@ export class GameScene extends Phaser.Scene {
     // Scene shutdown cleanup
     this.events.once('shutdown', () => {
       this.unsubs.forEach(f => f());
-      this.chatCursorTimer?.remove();
+      // Remove the DOM chat input and its resize handler
+      this.chatInputEl?.remove();
+      if (this.chatResizeHandler) window.removeEventListener('resize', this.chatResizeHandler);
       this.room?.leave();
     });
   }
@@ -656,9 +658,7 @@ export class GameScene extends Phaser.Scene {
     fKey?.on('down', () => { if (!this.chatFocused) this.flipPiece(); });
     escKey?.on('down', () => {
       if (this.chatFocused) {
-        this.chatFocused = false;
-        this.drawChatInputBg(false);
-        this.renderChatInput();
+        this.chatInputEl?.blur(); // triggers blur → sets chatFocused=false, redraws bg
       } else {
         this.deselectPiece();
       }
@@ -1261,21 +1261,9 @@ export class GameScene extends Phaser.Scene {
     // Divider above input
     div.lineBetween(cx + 8, inpY - 4, cx + cw - 8, inpY - 4);
 
-    // ── Input area ──────────────────────────────────────────────────────────
+    // ── Input area (Phaser draws the background; a real <input> sits on top) ──
     this.chatInputBgGfx = this.add.graphics().setDepth(9);
     this.drawChatInputBg(false);
-
-    // Clipping mask for input text so long strings don't overflow
-    const inpMask = this.make.graphics({ x: 0, y: 0 });
-    inpMask.fillStyle(0xffffff, 1);
-    inpMask.fillRect(cx + 8, inpY, inpW, inpH);
-
-    this.chatInputTextObj = this.add.text(
-      cx + 14, inpY + inpH / 2, '', {
-        fontSize: '13px', color: '#e2e8f0',
-      }
-    ).setOrigin(0, 0.5).setDepth(10);
-    this.chatInputTextObj.setMask(inpMask.createGeometryMask());
 
     // ── SEND button ─────────────────────────────────────────────────────────
     const sendX = cx + cw - 8 - sendW; // 1200
@@ -1299,55 +1287,88 @@ export class GameScene extends Phaser.Scene {
     sendZone.on('pointerover', () => drawSend(true));
     sendZone.on('pointerout',  () => drawSend(false));
 
-    // ── Input click zone (focus the chat field) ─────────────────────────────
-    const inputZone = this.add.zone(
-      cx + 8 + inpW / 2, inpY + inpH / 2, inpW, inpH
-    ).setInteractive().setDepth(12);
-    inputZone.on('pointerdown', () => {
+    // ── HTML <input> — transparent overlay for real IME / soft-keyboard support
+    // Inject placeholder style once per document.
+    if (!document.getElementById('blokus-chat-style')) {
+      const styleEl = document.createElement('style');
+      styleEl.id = 'blokus-chat-style';
+      styleEl.textContent =
+        '.blokus-chat-inp::placeholder{color:rgba(200,223,240,0.3);opacity:1}' +
+        '.blokus-chat-inp:focus{outline:none}';
+      document.head.appendChild(styleEl);
+    }
+
+    const canvas = this.sys.game.canvas;
+
+    // Compute position in screen pixels and keep it updated on resize.
+    const positionInput = () => {
+      if (!this.chatInputEl) return;
+      const r  = canvas.getBoundingClientRect();
+      const sx = r.width  / GAME_WIDTH;
+      const sy = r.height / GAME_HEIGHT;
+      Object.assign(this.chatInputEl.style, {
+        left:     `${r.left   + (cx + 8) * sx}px`,
+        top:      `${r.top    + inpY     * sy}px`,
+        width:    `${inpW               * sx}px`,
+        height:   `${inpH               * sy}px`,
+        fontSize: `${Math.max(11, Math.round(13 * sy))}px`,
+      });
+    };
+
+    const inputEl = document.createElement('input');
+    inputEl.type         = 'text';
+    inputEl.maxLength    = MAX_CHAT_TEXT_LEN;
+    inputEl.placeholder  = 'Type a message…';
+    inputEl.className    = 'blokus-chat-inp';
+    // Disable browser auto-features that mangle chat text on mobile/iOS
+    inputEl.autocomplete = 'off';
+    inputEl.setAttribute('autocorrect',    'off');
+    inputEl.setAttribute('autocapitalize', 'off');
+    inputEl.setAttribute('spellcheck',     'false');
+    // iOS / Android soft-keyboard hints
+    inputEl.setAttribute('inputmode',    'text');
+    inputEl.setAttribute('enterkeyhint', 'send');
+
+    // Transparent over the Phaser-drawn box; caret color matches the blue theme
+    Object.assign(inputEl.style, {
+      position:      'fixed',
+      background:    'transparent',
+      border:        'none',
+      outline:       'none',
+      color:         '#e2e8f0',
+      fontFamily:    'Arial, sans-serif',
+      padding:       '0 8px',
+      boxSizing:     'border-box',
+      zIndex:        '10000',
+      caretColor:    '#60a5fa',
+      pointerEvents: 'auto',
+    });
+
+    this.chatInputEl = inputEl;
+    positionInput(); // set initial position before appending
+    document.body.appendChild(inputEl);
+
+    // Keep position in sync whenever the window / canvas resizes
+    this.chatResizeHandler = positionInput;
+    window.addEventListener('resize', positionInput);
+
+    // Focus / blur → update visual state on the Phaser-drawn background
+    inputEl.addEventListener('focus', () => {
       this.chatFocused = true;
       this.drawChatInputBg(true);
-      this.renderChatInput();
+    });
+    inputEl.addEventListener('blur', () => {
+      this.chatFocused = false;
+      this.drawChatInputBg(false);
     });
 
-    // Global click: unfocus when clicking outside the input box
-    this.input.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
-      if (!this.chatFocused) return;
-      const inBox = ptr.x >= cx + 8 && ptr.x <= cx + 8 + inpW
-                 && ptr.y >= inpY   && ptr.y <= inpY + inpH;
-      if (!inBox) {
-        this.chatFocused = false;
-        this.drawChatInputBg(false);
-        this.renderChatInput();
-      }
-    });
-
-    // ── Keyboard: capture keys when chat is focused ─────────────────────────
-    this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
-      if (!this.chatFocused) return;
-      if (event.key === 'Enter') {
+    // Enter key → send; prevent the default newline / form-submit
+    inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
         this.sendChatMessage();
-      } else if (event.key === 'Backspace') {
-        this.chatInputStr = this.chatInputStr.slice(0, -1);
-        this.renderChatInput();
-      } else if (event.key.length === 1 && this.chatInputStr.length < MAX_CHAT_TEXT_LEN) {
-        this.chatInputStr += event.key;
-        this.renderChatInput();
       }
     });
-
-    // Cursor blink timer
-    this.chatCursorTimer = this.time.addEvent({
-      delay: 530, loop: true,
-      callback: () => {
-        if (this.chatFocused) {
-          this.chatCursorVisible = !this.chatCursorVisible;
-          this.renderChatInput();
-        }
-      },
-    });
-
-    // Initial placeholder render
-    this.renderChatInput();
   }
 
   /** Redraw the input box background to reflect focused / unfocused state. */
@@ -1388,17 +1409,6 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /** Redraw the input text, showing a blinking cursor when focused. */
-  private renderChatInput(): void {
-    if (!this.chatInputTextObj) return;
-    if (!this.chatFocused && this.chatInputStr === '') {
-      this.chatInputTextObj.setText('Click here to chat…').setAlpha(0.28);
-    } else {
-      const cursor = (this.chatFocused && this.chatCursorVisible) ? '|' : '';
-      this.chatInputTextObj.setText(this.chatInputStr + cursor).setAlpha(1);
-    }
-  }
-
   /** Push a new message into the log and refresh the display. */
   private appendChatMsg(text: string, isSystem: boolean): void {
     this.chatMessages.push({ text, isSystem });
@@ -1409,11 +1419,11 @@ export class GameScene extends Phaser.Scene {
 
   /** Send the current input text via room.chat and clear the field. */
   private async sendChatMessage(): Promise<void> {
-    if (!this.room) return;
-    const text = this.chatInputStr.trim();
+    if (!this.room || !this.chatInputEl) return;
+    const text = this.chatInputEl.value.trim();
     if (!text) return;
-    this.chatInputStr = '';
-    this.renderChatInput();
+    // Clear immediately — local echo from room.chat.send() will render it
+    this.chatInputEl.value = '';
     try {
       await this.room.chat.send(text);
     } catch {
