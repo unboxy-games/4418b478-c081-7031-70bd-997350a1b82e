@@ -1342,6 +1342,8 @@ export class GameScene extends Phaser.Scene {
       zIndex:        '10000',
       caretColor:    '#60a5fa',
       pointerEvents: 'auto',
+      // Prevent double-tap zoom on iOS and ensure fast tap response
+      touchAction:   'manipulation',
     });
 
     this.chatInputEl = inputEl;
@@ -1361,6 +1363,29 @@ export class GameScene extends Phaser.Scene {
       this.chatFocused = false;
       this.drawChatInputBg(false);
     });
+
+    // ── Touch focus fix ──────────────────────────────────────────────────────
+    // On iOS/Android, Phaser intercepts touchstart at the document/canvas level
+    // and calls preventDefault(), which prevents the browser's native
+    // tap-to-focus from firing on the <input> even when it's on top.
+    // Stopping propagation here prevents Phaser from seeing the event, and
+    // calling focus() synchronously inside a touchstart handler is the only
+    // reliable way to open the soft keyboard on iOS Safari / Android Chrome.
+    inputEl.addEventListener('touchstart', (e: TouchEvent) => {
+      e.stopPropagation();
+      inputEl.focus();
+    }, { passive: false });
+
+    // Also add a Phaser interactive zone over the input area as a fallback:
+    // if the touch somehow still reaches Phaser (e.g. the input is hidden or
+    // the coordinates miss), the zone calls focus() from the pointerdown which
+    // is also a user-gesture context on most browsers.
+    const inputZone = this.add.zone(
+      cx + 8 + inpW / 2,
+      inpY + inpH / 2,
+      inpW, inpH
+    ).setDepth(11).setInteractive();
+    inputZone.on('pointerdown', () => { this.chatInputEl?.focus(); });
 
     // Enter key → send; prevent the default newline / form-submit
     inputEl.addEventListener('keydown', (e: KeyboardEvent) => {

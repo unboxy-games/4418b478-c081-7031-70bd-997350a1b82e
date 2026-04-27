@@ -32,6 +32,12 @@
 - `joinRoomById()` uses `rooms.joinById(roomId, ...)` and drives first render from `onStateChange` (same state-timing guard as joinOrCreate)
 
 ## Changes This Turn
+- Fixed chat input not showing keyboard on iPad/Android touch devices:
+  - Added `touchstart` listener on the `<input>` element with `e.stopPropagation()` and synchronous `inputEl.focus()` — this prevents Phaser from calling `preventDefault()` on the event (which blocks browser tap-to-focus) and ensures the soft keyboard opens on iOS Safari / Android Chrome
+  - Added `touchAction: 'manipulation'` to the input style to prevent double-tap zoom delay on iOS
+  - Added a Phaser Zone over the input area (depth 11) that calls `inputEl.focus()` on `pointerdown` as a secondary fallback for edge cases
+
+## Previous Chat Implementation
 - Added in-game chat for online multiplayer:
   - Chat panel rendered below the piece thumbnails in the right-side panel (y≈358 to y≈710)
   - Uses `room.chat.send` / `room.chat.onMessage` (SDK chat helper, not raw `room.send`)
