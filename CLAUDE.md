@@ -32,6 +32,17 @@
 - `joinRoomById()` uses `rooms.joinById(roomId, ...)` and drives first render from `onStateChange` (same state-timing guard as joinOrCreate)
 
 ## Changes This Turn
+- Added bot difficulty selector (Easy / Medium / Hard):
+  - Clicking "PLAY OFFLINE" now opens a difficulty picker screen with three styled cards
+  - **Easy**: bot picks randomly from up to 50 valid moves (great for learning)
+  - **Medium**: existing heuristic — piece size × 20, anchor corners × 8, expansion × 1.5, noise [0,4)
+  - **Hard**: amplified weights — piece size × 35, anchors × 15, expansion × 3, near-zero noise (plays very consistently)
+  - Selection persists to `unboxy.saves` under key `settings.botDifficulty`; restored on next session
+  - Offline game HUD shows a pulsing "BOT: EASY / MEDIUM / HARD" badge in the panel
+  - `botDifficulty` / `setBotDifficulty` / `BotDifficulty` type added to `gameState.ts`
+  - `smartFindMove` accepts a `difficulty` parameter and branches accordingly
+
+## Previous Changes
 - Added NPC bots to always fill a full 4-player game:
   - Offline: player 0 = human, players 1–3 = bots (changed from 2-player to 4-player)
   - Online: host always starts a 4-player game; any slots beyond real connected players are NPC bots; host runs AI for NPC turns and broadcasts moves via `room.data`; non-host clients just render the synced state

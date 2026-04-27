@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 import { unboxyReady } from '../main';
 import { ALL_PIECE_NAMES, PLAYER_COLORS, PLAYER_NAMES } from '../data/pieces';
-import { setActiveRoom } from '../gameState';
+import { setActiveRoom, BotDifficulty, setBotDifficulty, botDifficulty } from '../gameState';
 
 function randomCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -51,6 +51,11 @@ export class LobbyScene extends Phaser.Scene {
   private async initPlatform(): Promise<void> {
     try {
       this.unboxy = await unboxyReady;
+      // Restore persisted settings (difficulty, etc.)
+      try {
+        const saved = await this.unboxy.saves.get('settings') as Record<string, any> | null;
+        if (saved?.botDifficulty) setBotDifficulty(saved.botDifficulty as BotDifficulty);
+      } catch { /* saves unavailable — use default */ }
       this.showMainMenu();
     } catch {
       this.showOfflineOption();
@@ -151,13 +156,107 @@ export class LobbyScene extends Phaser.Scene {
     } else {
       this.makeMenuButton('PLAY ONLINE (Sign in)', cx, baseY, 0x3b82f6, () => this.quickMatch());
     }
-    this.makeMenuButton('PLAY OFFLINE', cx, baseY + 308, 0x64748b, () => this.startOffline());
+    this.makeMenuButton('PLAY OFFLINE', cx, baseY + 308, 0x64748b, () => this.showDifficultyPicker());
   }
 
   private showOfflineOption(): void {
     this.clearMain();
     this.statusText.setText('Online unavailable').setVisible(true);
-    this.makeMenuButton('PLAY OFFLINE', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 50, 0x64748b, () => this.startOffline());
+    this.makeMenuButton('PLAY OFFLINE', GAME_WIDTH / 2, GAME_HEIGHT / 2 + 50, 0x64748b, () => this.showDifficultyPicker());
+  }
+
+  private showDifficultyPicker(): void {
+    this.clearMain();
+    this.statusText.setVisible(false);
+
+    const cx = GAME_WIDTH / 2;
+
+    // Title
+    const titleTxt = this.add.text(cx, 218, 'BOT DIFFICULTY', {
+      fontSize: '16px', color: '#64748b', letterSpacing: 6,
+    }).setOrigin(0.5).setDepth(10);
+    this.mainContainer.add(titleTxt as any);
+
+    const levels: Array<{
+      key: BotDifficulty;
+      label: string;
+      color: number;
+      desc: string;
+    }> = [
+      { key: 'easy',   label: '⭐  EASY',   color: 0x22c55e, desc: 'Bots pick moves at random — great for learning' },
+      { key: 'medium', label: '⭐⭐  MEDIUM', color: 0xf59e0b, desc: 'Bots prefer large pieces and open corners'       },
+      { key: 'hard',   label: '⭐⭐⭐  HARD',  color: 0xef4444, desc: 'Bots play aggressively and very consistently'   },
+    ];
+
+    const CARD_W = 560, CARD_H = 100, CARD_GAP = 18;
+    const startY = 268;
+
+    levels.forEach((lvl, i) => {
+      const y = startY + i * (CARD_H + CARD_GAP);
+      const isSelected = botDifficulty === lvl.key;
+      const alpha = isSelected ? 0.35 : 0.14;
+
+      const cardGfx = this.add.graphics().setDepth(10);
+      const drawCard = (hovered: boolean) => {
+        cardGfx.clear();
+        cardGfx.fillStyle(lvl.color, hovered || isSelected ? 0.32 : alpha);
+        cardGfx.fillRoundedRect(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 14);
+        cardGfx.lineStyle(isSelected ? 3 : 2, lvl.color, isSelected ? 1 : (hovered ? 0.9 : 0.5));
+        cardGfx.strokeRoundedRect(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 14);
+      };
+      drawCard(false);
+
+      const labelTxt = this.add.text(-CARD_W / 2 + 28, -18, lvl.label, {
+        fontSize: '22px', fontStyle: 'bold',
+        color: '#' + lvl.color.toString(16).padStart(6, '0'),
+      }).setOrigin(0, 0.5).setDepth(11);
+
+      const descTxt = this.add.text(-CARD_W / 2 + 28, 20, lvl.desc, {
+        fontSize: '15px', color: '#94a3b8',
+      }).setOrigin(0, 0.5).setDepth(11);
+
+      // "SELECTED" badge
+      const badgeTxt = this.add.text(CARD_W / 2 - 24, 0, isSelected ? '✓ SELECTED' : 'SELECT', {
+        fontSize: '13px', fontStyle: 'bold',
+        color: isSelected ? '#' + lvl.color.toString(16).padStart(6, '0') : '#475569',
+      }).setOrigin(1, 0.5).setDepth(11);
+
+      const cont = this.add.container(cx, y + CARD_H / 2, [cardGfx, labelTxt, descTxt, badgeTxt])
+        .setDepth(10)
+        .setInteractive(
+          new Phaser.Geom.Rectangle(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H),
+          Phaser.Geom.Rectangle.Contains
+        );
+
+      cont.on('pointerover', () => {
+        drawCard(true);
+        this.tweens.add({ targets: cont, scaleX: 1.02, scaleY: 1.02, duration: 80 });
+      });
+      cont.on('pointerout', () => {
+        drawCard(false);
+        this.tweens.add({ targets: cont, scaleX: 1, scaleY: 1, duration: 80 });
+      });
+      cont.on('pointerdown', () => {
+        setBotDifficulty(lvl.key);
+        // Persist to saves (best-effort)
+        if (this.unboxy) {
+          this.unboxy.saves.get('settings').then((existing: Record<string, any> | null) => {
+            return this.unboxy.saves.set('settings', { ...(existing ?? {}), botDifficulty: lvl.key });
+          }).catch(() => { /* ignore */ });
+        }
+        this.startOffline();
+      });
+
+      this.mainContainer.add(cont as any);
+    });
+
+    this.makeMenuButton('BACK', cx, startY + levels.length * (CARD_H + CARD_GAP) + 28, 0x64748b, () => {
+      if (this.unboxy) {
+        this.showMainMenu();
+      } else {
+        this.showOfflineOption();
+      }
+    });
   }
 
   private makeMenuButton(

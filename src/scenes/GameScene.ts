@@ -8,7 +8,7 @@ import {
   PLAYER_COLORS, PLAYER_COLORS_DARK, PLAYER_NAMES, PLAYER_CORNERS,
   canPlacePiece, getPieceCells, countRemainingCells, hasValidMove,
 } from '../data/pieces';
-import { activeRoom, myPlayerIndex, playerOrder, isOfflineMode, isHost as roomIsHost, humanPlayerCount as roomHumanPlayerCount, setActiveRoom } from '../gameState';
+import { activeRoom, myPlayerIndex, playerOrder, isOfflineMode, isHost as roomIsHost, humanPlayerCount as roomHumanPlayerCount, botDifficulty, BotDifficulty, setActiveRoom } from '../gameState';
 
 // ─── Bot AI ───────────────────────────────────────────────────────────────────
 
@@ -47,47 +47,72 @@ function countNewAnchors(
 
 /**
  * Score a candidate placement.  Higher = better.
- * Factors:
- *   • Piece size × 20         — play big pieces early
- *   • New anchor corners × 8  — keep future options open
- *   • Avg expansion dist × 1.5 — push away from own corner toward the centre
- *   • Random ε [0, 4)          — avoid identical bot behaviour
+ * Weights vary by difficulty:
+ *   easy   — not used (random selection instead)
+ *   medium — piece×20, anchors×8,  expansion×1.5, noise [0,4)
+ *   hard   — piece×35, anchors×15, expansion×3,   noise [0,0.5)
  */
 function scorePlacement(
   board: number[],
   cells: [number, number][],
   playerIndex: number,
-  pieceName: string
+  pieceName: string,
+  difficulty: BotDifficulty
 ): number {
   const pieceSize = BASE_PIECES[pieceName].length;
-  let score = pieceSize * 20;
+  const anchors   = countNewAnchors(board, cells, playerIndex);
+  const [cx, cy]  = PLAYER_CORNERS[playerIndex];
+  const avgDist   = cells.reduce((s, [x, y]) => s + Math.abs(x - cx) + Math.abs(y - cy), 0) / cells.length;
 
-  // Future anchor count
-  score += countNewAnchors(board, cells, playerIndex) * 8;
-
-  // Expansion: reward distance from own starting corner
-  const [cx, cy] = PLAYER_CORNERS[playerIndex];
-  const avgDist = cells.reduce((s, [x, y]) => s + Math.abs(x - cx) + Math.abs(y - cy), 0) / cells.length;
-  score += avgDist * 1.5;
-
-  // Small noise to avoid deterministic / predictable play
-  score += Math.random() * 4;
-
-  return score;
+  if (difficulty === 'hard') {
+    return pieceSize * 35 + anchors * 15 + avgDist * 3 + Math.random() * 0.5;
+  }
+  // medium (default)
+  return pieceSize * 20 + anchors * 8 + avgDist * 1.5 + Math.random() * 4;
 }
 
+type BotMove = { pieceName: string; orientation: number; bx: number; by: number };
+
 /**
- * Find the best move for `playerIndex` using a greedy one-ply heuristic.
- * Evaluates every valid placement for every remaining piece and returns
- * the highest-scoring option.
+ * Find the best move for `playerIndex`.
+ *
+ * Easy   — collects up to 50 valid moves then picks one at random.
+ * Medium — greedy one-ply heuristic with moderate weights.
+ * Hard   — same heuristic but with amplified weights and near-zero noise,
+ *          so the bot plays very consistently and aggressively.
  */
 function smartFindMove(
   board: number[],
   pieces: string[],
   playerIndex: number,
-  isFirstMove: boolean
-): { pieceName: string; orientation: number; bx: number; by: number } | null {
-  let bestMove: { pieceName: string; orientation: number; bx: number; by: number } | null = null;
+  isFirstMove: boolean,
+  difficulty: BotDifficulty = 'medium'
+): BotMove | null {
+
+  // ── Easy: just pick a random valid move ─────────────────────────────────────
+  if (difficulty === 'easy') {
+    const valid: BotMove[] = [];
+    outer:
+    for (const name of pieces) {
+      const orients = PIECE_ORIENTATIONS[name];
+      for (let oi = 0; oi < orients.length; oi++) {
+        const cells = orients[oi];
+        for (let by = 0; by < BOARD_ROWS; by++) {
+          for (let bx = 0; bx < BOARD_COLS; bx++) {
+            const abs = cells.map(([dx, dy]) => [bx + dx, by + dy] as [number, number]);
+            if (canPlacePiece(board, abs, playerIndex, isFirstMove)) {
+              valid.push({ pieceName: name, orientation: oi, bx, by });
+              if (valid.length >= 50) break outer;
+            }
+          }
+        }
+      }
+    }
+    return valid.length > 0 ? valid[Math.floor(Math.random() * valid.length)] : null;
+  }
+
+  // ── Medium / Hard: greedy heuristic ─────────────────────────────────────────
+  let bestMove: BotMove | null = null;
   let bestScore = -Infinity;
 
   // Try largest pieces first (they're hardest to place later)
@@ -101,7 +126,7 @@ function smartFindMove(
         for (let bx = 0; bx < BOARD_COLS; bx++) {
           const abs = cells.map(([dx, dy]) => [bx + dx, by + dy] as [number, number]);
           if (canPlacePiece(board, abs, playerIndex, isFirstMove)) {
-            const s = scorePlacement(board, abs, playerIndex, name);
+            const s = scorePlacement(board, abs, playerIndex, name, difficulty);
             if (s > bestScore) {
               bestScore = s;
               bestMove = { pieceName: name, orientation: oi, bx, by };
@@ -436,8 +461,20 @@ export class GameScene extends Phaser.Scene {
       this.scoreTexts.push(t);
     }
 
+    // Difficulty badge (offline only; shows bot strength for this session)
+    if (isOfflineMode) {
+      const diffColors: Record<string, string> = { easy: '#22c55e', medium: '#f59e0b', hard: '#ef4444' };
+      const diffLabel = `BOT: ${botDifficulty.toUpperCase()}`;
+      const diffColor = diffColors[botDifficulty] ?? '#94a3b8';
+      const diffBadge = this.add.text(PANEL_X + PANEL_W / 2, 76, diffLabel, {
+        fontSize: '11px', fontStyle: 'bold', color: diffColor, letterSpacing: 2, align: 'center',
+      }).setOrigin(0.5).setDepth(10).setAlpha(0.75);
+      // Pulse the badge subtly
+      this.tweens.add({ targets: diffBadge, alpha: { from: 0.55, to: 0.95 }, yoyo: true, repeat: -1, duration: 2000 });
+    }
+
     // "Your Pieces" label
-    this.myPiecesLabel = this.add.text(PANEL_X + PANEL_W / 2, 85, 'YOUR PIECES', {
+    this.myPiecesLabel = this.add.text(PANEL_X + PANEL_W / 2, 87, 'YOUR PIECES', {
       fontSize: '13px', color: '#64748b', letterSpacing: 3, align: 'center',
     }).setOrigin(0.5).setDepth(10);
 
@@ -463,7 +500,7 @@ export class GameScene extends Phaser.Scene {
 
     const slotW = Math.floor(PANEL_W / THUMB_COLS);
     const slotH = THUMB_SIZE;
-    const startY = 102;
+    const startY = 106;
 
     for (let i = 0; i < allPieces.length; i++) {
       const name = allPieces[i];
@@ -927,7 +964,7 @@ export class GameScene extends Phaser.Scene {
       const aiIdx = this.currentTurn;
       const aiPieces = [...(this.playerPieces[aiIdx] ?? [])];
       const isFirst = this.firstMove[aiIdx] ?? true;
-      const move = smartFindMove(this.board, aiPieces, aiIdx, isFirst);
+      const move = smartFindMove(this.board, aiPieces, aiIdx, isFirst, botDifficulty);
 
       if (move) {
         // Apply the NPC move to the shared board

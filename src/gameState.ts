@@ -7,6 +7,11 @@ export let isHost: boolean = false;
 /** Number of real human players; slots beyond this index are NPCs. */
 export let humanPlayerCount: number = 1;
 
+/** How challenging the NPC bots play. */
+export type BotDifficulty = 'easy' | 'medium' | 'hard';
+export let botDifficulty: BotDifficulty = 'medium';
+export function setBotDifficulty(d: BotDifficulty): void { botDifficulty = d; }
+
 export function setActiveRoom(
   room: any,
   idx: number,
