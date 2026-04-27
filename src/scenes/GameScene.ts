@@ -10,14 +10,90 @@ import {
 } from '../data/pieces';
 import { activeRoom, myPlayerIndex, playerOrder, isOfflineMode, isHost as roomIsHost, humanPlayerCount as roomHumanPlayerCount, setActiveRoom } from '../gameState';
 
-// ─── Offline AI stub ──────────────────────────────────────────────────────────
-function offlineFindMove(
+// ─── Bot AI ───────────────────────────────────────────────────────────────────
+
+/**
+ * Count how many free diagonal-only anchor squares the player would have
+ * after placing `newCells` on the board.  More anchors = more future options.
+ */
+function countNewAnchors(
+  board: number[],
+  newCells: [number, number][],
+  playerIndex: number
+): number {
+  const placedSet = new Set(newCells.map(([x, y]) => `${x},${y}`));
+  const anchors = new Set<string>();
+  for (const [x, y] of newCells) {
+    for (const [dx, dy] of [[1,1],[1,-1],[-1,1],[-1,-1]] as [number,number][]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || nx >= 20 || ny < 0 || ny >= 20) continue;
+      if (board[ny * 20 + nx] !== -1) continue;        // occupied
+      if (placedSet.has(`${nx},${ny}`)) continue;       // part of this piece
+      // Must not be edge-adjacent to any own cell (existing or newly placed)
+      let edgeAdjOwn = false;
+      for (const [ex, ey] of [[1,0],[-1,0],[0,1],[0,-1]] as [number,number][]) {
+        const ax = nx + ex, ay = ny + ey;
+        if (ax < 0 || ax >= 20 || ay < 0 || ay >= 20) continue;
+        if (board[ay * 20 + ax] === playerIndex || placedSet.has(`${ax},${ay}`)) {
+          edgeAdjOwn = true;
+          break;
+        }
+      }
+      if (!edgeAdjOwn) anchors.add(`${nx},${ny}`);
+    }
+  }
+  return anchors.size;
+}
+
+/**
+ * Score a candidate placement.  Higher = better.
+ * Factors:
+ *   • Piece size × 20         — play big pieces early
+ *   • New anchor corners × 8  — keep future options open
+ *   • Avg expansion dist × 1.5 — push away from own corner toward the centre
+ *   • Random ε [0, 4)          — avoid identical bot behaviour
+ */
+function scorePlacement(
+  board: number[],
+  cells: [number, number][],
+  playerIndex: number,
+  pieceName: string
+): number {
+  const pieceSize = BASE_PIECES[pieceName].length;
+  let score = pieceSize * 20;
+
+  // Future anchor count
+  score += countNewAnchors(board, cells, playerIndex) * 8;
+
+  // Expansion: reward distance from own starting corner
+  const [cx, cy] = PLAYER_CORNERS[playerIndex];
+  const avgDist = cells.reduce((s, [x, y]) => s + Math.abs(x - cx) + Math.abs(y - cy), 0) / cells.length;
+  score += avgDist * 1.5;
+
+  // Small noise to avoid deterministic / predictable play
+  score += Math.random() * 4;
+
+  return score;
+}
+
+/**
+ * Find the best move for `playerIndex` using a greedy one-ply heuristic.
+ * Evaluates every valid placement for every remaining piece and returns
+ * the highest-scoring option.
+ */
+function smartFindMove(
   board: number[],
   pieces: string[],
   playerIndex: number,
   isFirstMove: boolean
 ): { pieceName: string; orientation: number; bx: number; by: number } | null {
-  for (const name of pieces) {
+  let bestMove: { pieceName: string; orientation: number; bx: number; by: number } | null = null;
+  let bestScore = -Infinity;
+
+  // Try largest pieces first (they're hardest to place later)
+  const sortedPieces = [...pieces].sort((a, b) => BASE_PIECES[b].length - BASE_PIECES[a].length);
+
+  for (const name of sortedPieces) {
     const orients = PIECE_ORIENTATIONS[name];
     for (let oi = 0; oi < orients.length; oi++) {
       const cells = orients[oi];
@@ -25,13 +101,17 @@ function offlineFindMove(
         for (let bx = 0; bx < BOARD_COLS; bx++) {
           const abs = cells.map(([dx, dy]) => [bx + dx, by + dy] as [number, number]);
           if (canPlacePiece(board, abs, playerIndex, isFirstMove)) {
-            return { pieceName: name, orientation: oi, bx, by };
+            const s = scorePlacement(board, abs, playerIndex, name);
+            if (s > bestScore) {
+              bestScore = s;
+              bestMove = { pieceName: name, orientation: oi, bx, by };
+            }
           }
         }
       }
     }
   }
-  return null;
+  return bestMove;
 }
 
 // ─── Scene ────────────────────────────────────────────────────────────────────
@@ -847,7 +927,7 @@ export class GameScene extends Phaser.Scene {
       const aiIdx = this.currentTurn;
       const aiPieces = [...(this.playerPieces[aiIdx] ?? [])];
       const isFirst = this.firstMove[aiIdx] ?? true;
-      const move = offlineFindMove(this.board, aiPieces, aiIdx, isFirst);
+      const move = smartFindMove(this.board, aiPieces, aiIdx, isFirst);
 
       if (move) {
         // Apply the NPC move to the shared board
