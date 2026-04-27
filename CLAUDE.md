@@ -32,6 +32,20 @@
 - `joinRoomById()` uses `rooms.joinById(roomId, ...)` and drives first render from `onStateChange` (same state-timing guard as joinOrCreate)
 
 ## Changes This Turn
+- Added in-game chat for online multiplayer:
+  - Chat panel rendered below the piece thumbnails in the right-side panel (y≈358 to y≈710)
+  - Uses `room.chat.send` / `room.chat.onMessage` (SDK chat helper, not raw `room.send`)
+  - Message log: pool of 14 Phaser Text objects, newest message at bottom, muted blue for user messages, darker grey for system messages
+  - System join/leave messages automatically displayed (from `msg.kind === 'system.joined'/'system.left'`)
+  - Input box with placeholder text, blinking cursor when focused (530ms blink), geometry mask prevents overflow
+  - Click input box to focus; click anywhere else or press ESC to unfocus
+  - Enter key or SEND button sends the message; Backspace to edit
+  - R/F/ESC game shortcuts are blocked when chat is focused
+  - `MAX_CHAT_TEXT_LEN` (500) imported from SDK and used as input cap
+  - `offChat` unsubscribe stored in `unsubs`; `chatCursorTimer` removed on scene shutdown
+  - Chat panel is only rendered in online mode (`if (this.room) buildChatPanel()`)
+
+## Previous Changes (bot difficulty)
 - Added bot difficulty selector (Easy / Medium / Hard):
   - Clicking "PLAY OFFLINE" now opens a difficulty picker screen with three styled cards
   - **Easy**: bot picks randomly from up to 50 valid moves (great for learning)

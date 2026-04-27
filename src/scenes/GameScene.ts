@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { MAX_CHAT_TEXT_LEN } from '@unboxy/phaser-sdk';
+import type { ChatMessage } from '@unboxy/phaser-sdk';
 import {
   CELL, BOARD_ORIG_X, BOARD_ORIG_Y, BOARD_COLS, BOARD_ROWS, BOARD_PX,
   PANEL_X, PANEL_W, THUMB_COLS, THUMB_SIZE, GAME_WIDTH, GAME_HEIGHT,
@@ -202,6 +204,22 @@ export class GameScene extends Phaser.Scene {
   // Particles
   private emitter!: Phaser.GameObjects.Particles.ParticleEmitter;
 
+  // ─── Chat (online mode only) ──────────────────────────────────────────────
+  // All layout constants reference module-level PANEL_X / PANEL_W / GAME_HEIGHT
+  private readonly CCX = PANEL_X + 6;            // 605 — left edge of chat panel
+  private readonly CCY = 358;                     // top of chat area (below thumbnails)
+  private readonly CCW = PANEL_W - 12;            // 659 — chat panel width
+  private readonly CCH = GAME_HEIGHT - 358 - 10;  // 352 — chat panel height (to y≈710)
+  private chatMsgPool: Phaser.GameObjects.Text[] = [];
+  private chatMessages: Array<{ text: string; isSystem: boolean }> = [];
+  private readonly MAX_CHAT_VISIBLE = 14;
+  private chatInputStr = '';
+  private chatInputTextObj?: Phaser.GameObjects.Text;
+  private chatInputBgGfx?: Phaser.GameObjects.Graphics;
+  private chatFocused = false;
+  private chatCursorVisible = true;
+  private chatCursorTimer?: Phaser.Time.TimerEvent;
+
   constructor() {
     super({ key: 'GameScene' });
   }
@@ -229,11 +247,13 @@ export class GameScene extends Phaser.Scene {
     this.buildControls();
     this.setupBoardInput();
     this.buildParticles();
+    if (this.room) this.buildChatPanel();
 
     if (this.room) {
       this.setupRoomListeners();
       // Set my pieces in room state
       this.room.player.set('pieces', [...ALL_PIECE_NAMES]);
+      this.setupChat();
     }
 
     this.renderAll();
@@ -241,6 +261,7 @@ export class GameScene extends Phaser.Scene {
     // Scene shutdown cleanup
     this.events.once('shutdown', () => {
       this.unsubs.forEach(f => f());
+      this.chatCursorTimer?.remove();
       this.room?.leave();
     });
   }
@@ -631,9 +652,17 @@ export class GameScene extends Phaser.Scene {
     const fKey   = this.input.keyboard?.addKey('F');
     const escKey = this.input.keyboard?.addKey('ESC');
 
-    rKey?.on('down', () => this.rotatePiece());
-    fKey?.on('down', () => this.flipPiece());
-    escKey?.on('down', () => this.deselectPiece());
+    rKey?.on('down', () => { if (!this.chatFocused) this.rotatePiece(); });
+    fKey?.on('down', () => { if (!this.chatFocused) this.flipPiece(); });
+    escKey?.on('down', () => {
+      if (this.chatFocused) {
+        this.chatFocused = false;
+        this.drawChatInputBg(false);
+        this.renderChatInput();
+      } else {
+        this.deselectPiece();
+      }
+    });
   }
 
   /** Show/hide the PLACE button and colour it based on whether the current preview is valid. */
@@ -1170,6 +1199,245 @@ export class GameScene extends Phaser.Scene {
       console.warn('Could not save high score');
     }
   }
+
+  // ─── Chat (online mode only) ──────────────────────────────────────────────
+
+  /**
+   * Build the chat panel below the piece thumbnails on the right side.
+   * Only called when an online room is active.
+   */
+  private buildChatPanel(): void {
+    const cx = this.CCX, cy = this.CCY, cw = this.CCW, ch = this.CCH;
+
+    // Derived layout values (kept local to avoid duplication with drawChatInputBg)
+    const logY  = cy + 30;    // top of message log area (388)
+    const logH  = 246;        // height of log area — fits MAX_CHAT_VISIBLE=14 lines at 17px each
+    const logX  = cx + 8;
+    const logW  = cw - 16;    // 643
+    const inpY  = logY + logH + 8; // top of input row (642)
+    const inpH  = 40;
+    const sendW = 56;
+    const inpW  = logW - sendW - 4; // 583
+
+    // ── Background ─────────────────────────────────────────────────────────
+    const bg = this.add.graphics().setDepth(7);
+    bg.fillStyle(0x060e18, 0.93);
+    bg.fillRoundedRect(cx, cy, cw, ch, 8);
+    bg.lineStyle(1, 0x1a3350, 0.5);
+    bg.strokeRoundedRect(cx, cy, cw, ch, 8);
+
+    // Header label
+    this.add.text(cx + cw / 2, cy + 15, 'C H A T', {
+      fontSize: '11px', fontStyle: 'bold', color: '#2a4a6a', letterSpacing: 4,
+    }).setOrigin(0.5).setDepth(10);
+
+    // Dividers
+    const div = this.add.graphics().setDepth(7);
+    div.lineStyle(1, 0x162a40, 1);
+    div.lineBetween(cx + 8, cy + 28, cx + cw - 8, cy + 28);
+
+    // ── Message log — pool of 14 text objects at fixed row positions ────────
+    const lineH = Math.floor(logH / this.MAX_CHAT_VISIBLE); // 17px
+
+    // Geometry mask so text is clipped to the log area
+    const maskGfx = this.make.graphics({ x: 0, y: 0 });
+    maskGfx.fillStyle(0xffffff, 1);
+    maskGfx.fillRect(logX, logY, logW, logH);
+    const logMask = maskGfx.createGeometryMask();
+
+    for (let i = 0; i < this.MAX_CHAT_VISIBLE; i++) {
+      const t = this.add.text(
+        logX + 4,
+        logY + i * lineH + lineH / 2,
+        '', {
+          fontSize: '13px',
+          color: '#c8dff0',
+        }
+      ).setOrigin(0, 0.5).setDepth(10);
+      t.setMask(logMask);
+      this.chatMsgPool.push(t);
+    }
+
+    // Divider above input
+    div.lineBetween(cx + 8, inpY - 4, cx + cw - 8, inpY - 4);
+
+    // ── Input area ──────────────────────────────────────────────────────────
+    this.chatInputBgGfx = this.add.graphics().setDepth(9);
+    this.drawChatInputBg(false);
+
+    // Clipping mask for input text so long strings don't overflow
+    const inpMask = this.make.graphics({ x: 0, y: 0 });
+    inpMask.fillStyle(0xffffff, 1);
+    inpMask.fillRect(cx + 8, inpY, inpW, inpH);
+
+    this.chatInputTextObj = this.add.text(
+      cx + 14, inpY + inpH / 2, '', {
+        fontSize: '13px', color: '#e2e8f0',
+      }
+    ).setOrigin(0, 0.5).setDepth(10);
+    this.chatInputTextObj.setMask(inpMask.createGeometryMask());
+
+    // ── SEND button ─────────────────────────────────────────────────────────
+    const sendX = cx + cw - 8 - sendW; // 1200
+    const sendBtnBg = this.add.graphics().setDepth(9);
+    const drawSend = (hover: boolean) => {
+      sendBtnBg.clear();
+      sendBtnBg.fillStyle(0x1d4ed8, hover ? 0.5 : 0.2);
+      sendBtnBg.fillRoundedRect(sendX, inpY + 4, sendW, inpH - 8, 5);
+      sendBtnBg.lineStyle(1, 0x3b82f6, hover ? 0.9 : 0.45);
+      sendBtnBg.strokeRoundedRect(sendX, inpY + 4, sendW, inpH - 8, 5);
+    };
+    drawSend(false);
+
+    this.add.text(sendX + sendW / 2, inpY + inpH / 2, 'SEND', {
+      fontSize: '11px', fontStyle: 'bold', color: '#60a5fa',
+    }).setOrigin(0.5).setDepth(10);
+
+    const sendZone = this.add.zone(sendX + sendW / 2, inpY + inpH / 2, sendW, inpH)
+      .setInteractive().setDepth(12);
+    sendZone.on('pointerdown', () => this.sendChatMessage());
+    sendZone.on('pointerover', () => drawSend(true));
+    sendZone.on('pointerout',  () => drawSend(false));
+
+    // ── Input click zone (focus the chat field) ─────────────────────────────
+    const inputZone = this.add.zone(
+      cx + 8 + inpW / 2, inpY + inpH / 2, inpW, inpH
+    ).setInteractive().setDepth(12);
+    inputZone.on('pointerdown', () => {
+      this.chatFocused = true;
+      this.drawChatInputBg(true);
+      this.renderChatInput();
+    });
+
+    // Global click: unfocus when clicking outside the input box
+    this.input.on('pointerdown', (ptr: Phaser.Input.Pointer) => {
+      if (!this.chatFocused) return;
+      const inBox = ptr.x >= cx + 8 && ptr.x <= cx + 8 + inpW
+                 && ptr.y >= inpY   && ptr.y <= inpY + inpH;
+      if (!inBox) {
+        this.chatFocused = false;
+        this.drawChatInputBg(false);
+        this.renderChatInput();
+      }
+    });
+
+    // ── Keyboard: capture keys when chat is focused ─────────────────────────
+    this.input.keyboard?.on('keydown', (event: KeyboardEvent) => {
+      if (!this.chatFocused) return;
+      if (event.key === 'Enter') {
+        this.sendChatMessage();
+      } else if (event.key === 'Backspace') {
+        this.chatInputStr = this.chatInputStr.slice(0, -1);
+        this.renderChatInput();
+      } else if (event.key.length === 1 && this.chatInputStr.length < MAX_CHAT_TEXT_LEN) {
+        this.chatInputStr += event.key;
+        this.renderChatInput();
+      }
+    });
+
+    // Cursor blink timer
+    this.chatCursorTimer = this.time.addEvent({
+      delay: 530, loop: true,
+      callback: () => {
+        if (this.chatFocused) {
+          this.chatCursorVisible = !this.chatCursorVisible;
+          this.renderChatInput();
+        }
+      },
+    });
+
+    // Initial placeholder render
+    this.renderChatInput();
+  }
+
+  /** Redraw the input box background to reflect focused / unfocused state. */
+  private drawChatInputBg(focused: boolean): void {
+    if (!this.chatInputBgGfx) return;
+    const cx  = this.CCX, cy  = this.CCY, cw  = this.CCW;
+    const logH = 246;
+    const inpY = cy + 30 + logH + 8; // matches buildChatPanel
+    const inpH = 40;
+    const sendW = 56;
+    const inpW  = cw - 16 - sendW - 4;
+
+    this.chatInputBgGfx.clear();
+    this.chatInputBgGfx.fillStyle(focused ? 0x0e2237 : 0x071018, 0.9);
+    this.chatInputBgGfx.fillRoundedRect(cx + 8, inpY, inpW, inpH, 6);
+    this.chatInputBgGfx.lineStyle(1, focused ? 0x3b82f6 : 0x162a40, focused ? 0.85 : 0.4);
+    this.chatInputBgGfx.strokeRoundedRect(cx + 8, inpY, inpW, inpH, 6);
+  }
+
+  /** Sync the log pool text objects to the most recent MAX_CHAT_VISIBLE messages. */
+  private renderChatLog(): void {
+    const N    = this.MAX_CHAT_VISIBLE;
+    const msgs = this.chatMessages;
+    for (let i = 0; i < N; i++) {
+      const t = this.chatMsgPool[i];
+      if (!t) continue;
+      const msgIdx = msgs.length - N + i;
+      if (msgIdx < 0) {
+        t.setText('');
+      } else {
+        const msg = msgs[msgIdx];
+        // Truncate very long lines to keep the layout clean (no wrapping needed)
+        let line = msg.isSystem ? `· ${msg.text}` : msg.text;
+        if (line.length > 80) line = line.slice(0, 79) + '…';
+        t.setText(line);
+        t.setColor(msg.isSystem ? '#4a6a86' : '#c8dff0');
+      }
+    }
+  }
+
+  /** Redraw the input text, showing a blinking cursor when focused. */
+  private renderChatInput(): void {
+    if (!this.chatInputTextObj) return;
+    if (!this.chatFocused && this.chatInputStr === '') {
+      this.chatInputTextObj.setText('Click here to chat…').setAlpha(0.28);
+    } else {
+      const cursor = (this.chatFocused && this.chatCursorVisible) ? '|' : '';
+      this.chatInputTextObj.setText(this.chatInputStr + cursor).setAlpha(1);
+    }
+  }
+
+  /** Push a new message into the log and refresh the display. */
+  private appendChatMsg(text: string, isSystem: boolean): void {
+    this.chatMessages.push({ text, isSystem });
+    // Cap stored history to avoid unbounded growth
+    if (this.chatMessages.length > 300) this.chatMessages.splice(0, 150);
+    this.renderChatLog();
+  }
+
+  /** Send the current input text via room.chat and clear the field. */
+  private async sendChatMessage(): Promise<void> {
+    if (!this.room) return;
+    const text = this.chatInputStr.trim();
+    if (!text) return;
+    this.chatInputStr = '';
+    this.renderChatInput();
+    try {
+      await this.room.chat.send(text);
+    } catch {
+      this.appendChatMsg('Message could not be sent', true);
+    }
+  }
+
+  /** Wire up room.chat.onMessage to the chat panel. */
+  private setupChat(): void {
+    if (!this.room) return;
+    const offChat = this.room.chat.onMessage((msg: ChatMessage) => {
+      if (msg.kind === 'user') {
+        const isMe = msg.from === this.room?.sessionId;
+        const who  = isMe ? 'You' : (msg.displayName || 'Player');
+        this.appendChatMsg(`${who}: ${msg.text}`, false);
+      } else {
+        // 'system.joined' / 'system.left' — msg.text is the English fallback
+        this.appendChatMsg(msg.text, true);
+      }
+    });
+    this.unsubs.push(offChat);
+  }
+
+  // ─── Game loop ─────────────────────────────────────────────────────────────
 
   update(): void {
     // Idle animation: subtle shimmer on current player's corner
