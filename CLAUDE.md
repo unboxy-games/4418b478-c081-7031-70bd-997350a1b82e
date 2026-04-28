@@ -17,7 +17,7 @@ A Google-Doodle-Halloween-style game where a cute cat wizard defeats ghosts by d
 ## Key implementation details
 - `GameScene.ts`: all game logic (cat, ghosts, drawing, gesture recognition, level flow)
 - `UIScene.ts`: HUD overlay (score, level, heart icons drawn with parametric heart curve)
-- Ghost recognition: `countCorners()` samples ~28 points from path; `countXReversals()` for zigzag
+- Ghost recognition: closed shapes use centroid-distance CV (circle CV<0.20, triangle CV≥0.20); open shapes use `countXReversals()` + `countSharpCorners()` for zigzag. Path is smoothed before analysis to remove mouse jitter. Spell targets nearest ghost to draw centroid.
 - Ghost types: `GhostType = 'regular' | 'pumpkin' | 'bat' | 'boss'`
 - Boss uses `bossPhase` (0/1/2) to track which spell is next; `renderGhost()` redraws on hit
 

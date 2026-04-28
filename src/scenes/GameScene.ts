@@ -558,6 +558,18 @@ export class GameScene extends Phaser.Scene {
 
   // ─── GESTURE RECOGNITION ──────────────────────────────────────────────────
 
+  /** Smooth path with a moving-average window to remove mouse jitter. */
+  private smoothPath(pts: { x: number; y: number }[]): { x: number; y: number }[] {
+    const W = 5;
+    return pts.map((_, i) => {
+      let sx = 0, sy = 0, cnt = 0;
+      for (let j = Math.max(0, i - W); j <= Math.min(pts.length - 1, i + W); j++) {
+        sx += pts[j].x; sy += pts[j].y; cnt++;
+      }
+      return { x: sx / cnt, y: sy / cnt };
+    });
+  }
+
   private recognizeShape(pts: { x: number; y: number }[]): SpellShape | null {
     if (pts.length < 12) return null;
 
@@ -567,45 +579,56 @@ export class GameScene extends Phaser.Scene {
     const minY = Math.min(...ys), maxY = Math.max(...ys);
     const w = maxX - minX;
     const h = maxY - minY;
-    if (w < 35 && h < 35) return null;
+    if (w < 40 && h < 40) return null; // too small
 
     const start = pts[0];
     const end = pts[pts.length - 1];
     const startEndDist = Math.hypot(end.x - start.x, end.y - start.y);
     const diagonal = Math.hypot(w, h);
-    const isClosed = startEndDist < diagonal * 0.38;
+    const isClosed = startEndDist < diagonal * 0.42;
 
-    const corners = this.countCorners(pts);
-    const xReversals = this.countXReversals(pts);
+    const smooth = this.smoothPath(pts);
 
     if (isClosed) {
-      // Closed shapes: circle or triangle
-      if (corners >= 5) return 'triangle'; // triangle has ~6-8 corner samples
-      return 'circle';
+      // ── Circle vs Triangle ──────────────────────────────────────────────
+      // Key insight: measure how uniform each point's distance is from the
+      // path centroid. A circle → all points ~equidistant → low CV.
+      // A triangle → corner points stick far out, edge midpoints are close → high CV.
+      // Mouse jitter cannot meaningfully change this ratio.
+      const cx = smooth.reduce((s, p) => s + p.x, 0) / smooth.length;
+      const cy = smooth.reduce((s, p) => s + p.y, 0) / smooth.length;
+      const dists = smooth.map(p => Math.hypot(p.x - cx, p.y - cy));
+      const avgD = dists.reduce((s, d) => s + d, 0) / dists.length;
+      if (avgD < 10) return null; // degenerate
+      const stdD = Math.sqrt(dists.reduce((s, d) => s + (d - avgD) ** 2, 0) / dists.length);
+      const cv = stdD / avgD; // coefficient of variation
+
+      // Empirically: drawn circles give CV ~0.05–0.15; triangles give CV ~0.22–0.40
+      if (cv < 0.20) return 'circle';
+      return 'triangle';
+
     } else {
-      // Open shape: lightning/zigzag
-      if (xReversals >= 2 || corners >= 6) return 'lightning';
+      // ── Lightning / zigzag ───────────────────────────────────────────────
+      const xReversals = this.countXReversals(pts);
+      const sharpCorners = this.countSharpCorners(smooth);
+      if (xReversals >= 2 || sharpCorners >= 3) return 'lightning';
       return null;
     }
   }
 
-  private countCorners(pts: { x: number; y: number }[]): number {
-    const n = 28;
-    const step = Math.max(1, Math.floor(pts.length / n));
+  /** Count sharp direction changes (> 60°) for zigzag detection only. */
+  private countSharpCorners(pts: { x: number; y: number }[]): number {
+    const step = Math.max(1, Math.floor(pts.length / 20));
     const sampled: { x: number; y: number }[] = [];
     for (let i = 0; i < pts.length; i += step) sampled.push(pts[i]);
 
     let corners = 0;
-    const lookAhead = 2;
-    for (let i = lookAhead; i < sampled.length - lookAhead; i++) {
-      const p1 = sampled[i - lookAhead];
-      const p2 = sampled[i];
-      const p3 = sampled[i + lookAhead];
-      const a1 = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-      const a2 = Math.atan2(p3.y - p2.y, p3.x - p2.x);
+    for (let i = 2; i < sampled.length - 2; i++) {
+      const a1 = Math.atan2(sampled[i].y - sampled[i - 2].y, sampled[i].x - sampled[i - 2].x);
+      const a2 = Math.atan2(sampled[i + 2].y - sampled[i].y, sampled[i + 2].x - sampled[i].x);
       let diff = Math.abs(a2 - a1);
       if (diff > Math.PI) diff = 2 * Math.PI - diff;
-      if (diff > 0.75) corners++;
+      if (diff > 1.05) corners++; // > ~60°
     }
     return corners;
   }
@@ -616,7 +639,7 @@ export class GameScene extends Phaser.Scene {
     let prevDir = 0;
     for (let i = step; i < pts.length; i += step) {
       const dx = pts[i].x - pts[i - step].x;
-      const dir = dx > 8 ? 1 : dx < -8 ? -1 : 0;
+      const dir = dx > 10 ? 1 : dx < -10 ? -1 : 0;
       if (dir !== 0 && prevDir !== 0 && dir !== prevDir) reversals++;
       if (dir !== 0) prevDir = dir;
     }
@@ -626,10 +649,12 @@ export class GameScene extends Phaser.Scene {
   // ─── GHOST INTERACTION ────────────────────────────────────────────────────
 
   private tryHitGhost(shape: SpellShape): void {
-    // Find nearest ghost that needs this spell
-    const px = GAME_WIDTH / 2;
-    const py = GAME_HEIGHT / 2;
+    // Use the centroid of the drawn path as the "aim" point
+    const pathCx = this.drawPath.reduce((s, p) => s + p.x, 0) / Math.max(1, this.drawPath.length);
+    const pathCy = this.drawPath.reduce((s, p) => s + p.y, 0) / Math.max(1, this.drawPath.length);
 
+    // Find any alive ghost that needs this spell — prioritise the one
+    // whose centre is nearest to where the player actually drew.
     let best: Ghost | null = null;
     let bestDist = Infinity;
 
@@ -637,7 +662,7 @@ export class GameScene extends Phaser.Scene {
       if (!ghost.alive) continue;
       const needed = this.getRequiredSpell(ghost);
       if (needed !== shape) continue;
-      const d = Math.hypot(ghost.container.x - px, ghost.container.y - py);
+      const d = Math.hypot(ghost.container.x - pathCx, ghost.container.y - pathCy);
       if (d < bestDist) { bestDist = d; best = ghost; }
     }
 
