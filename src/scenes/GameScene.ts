@@ -85,7 +85,8 @@ export class GameScene extends Phaser.Scene {
   private hiScore = 0;
   private level   = 0;
   private state: State = 'playing';
-  private wideMs  = 0;
+  private wideMs    = 0;
+  private padHitMs  = 0;   // countdown for paddle-hit flash (ms)
 
   // HUD refs
   private scoreDisp!: Phaser.GameObjects.Text;
@@ -228,6 +229,8 @@ export class GameScene extends Phaser.Scene {
       this.wideMs -= delta;
       if (this.wideMs <= 0) this.padW = PAD_W0;
     }
+    // Paddle-hit flash countdown
+    if (this.padHitMs > 0) this.padHitMs -= delta;
 
     // Ball trail
     this.trailMs += delta;
@@ -306,7 +309,7 @@ export class GameScene extends Phaser.Scene {
       this.bvx = Math.cos(ang) * spd;
       this.bvy = Math.sin(ang) * spd;
       if (this.bvy > 0) this.bvy = -this.bvy;
-      this.tweens.add({ targets: this.padGfx, scaleX: 1.07, scaleY: 0.78, duration: 75, yoyo: true, ease: 'Sine.easeOut' });
+      this.padHitMs = 120;   // trigger flash drawn in drawPaddle()
     }
   }
 
@@ -530,6 +533,12 @@ export class GameScene extends Phaser.Scene {
     // Border
     this.padGfx.lineStyle(1.5, 0x667799, 0.7);
     this.padGfx.strokeRoundedRect(x, y, this.padW, PAD_H, r);
+    // Hit flash — fades out over 120 ms after a ball bounce
+    if (this.padHitMs > 0) {
+      const alpha = (this.padHitMs / 120) * 0.55;
+      this.padGfx.fillStyle(0xffffff, alpha);
+      this.padGfx.fillRoundedRect(x, y, this.padW, PAD_H, r);
+    }
   }
 
   private drawBall(): void {

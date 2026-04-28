@@ -36,4 +36,4 @@ Single-player. Mouse to move paddle, click or Space to launch ball.
 - **Click / Space** — launch ball; confirm dialogs
 
 ## What changed this turn
-- Built the entire game from scratch (was placeholder "Describe your game" screen)
+- Fixed paddle-hit flash bug: removed scaleX/scaleY tween on padGfx (Graphics drawn at absolute coords scale from screen origin, not paddle center — causing visual warp). Replaced with a `padHitMs` countdown that renders a fading white overlay directly inside `drawPaddle()` each frame.
