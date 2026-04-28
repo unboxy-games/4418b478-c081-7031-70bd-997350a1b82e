@@ -327,12 +327,18 @@ export class GameScene extends Phaser.Scene {
     const eyeR = this.add.graphics();
 
     const hintSpell = type === 'boss' ? 'circle' : (GHOST_SPELL[type] as SpellShape);
+    // Attach hint text INSIDE the container so it always moves with its own ghost
+    const hintY = type === 'boss' ? -140 : -90;
     const hintText = this.add
-      .text(0, -75, SPELL_HINTS[hintSpell], { fontSize: '28px', color: '#ffffff' })
-      .setOrigin(0.5)
-      .setDepth(9);
+      .text(0, hintY, SPELL_HINTS[hintSpell], {
+        fontSize: type === 'boss' ? '36px' : '28px',
+        color: '#ffffff',
+        stroke: '#000000',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5);
 
-    container.add([g, eyeL, eyeR]);
+    container.add([g, eyeL, eyeR, hintText]);
 
     const hp = type === 'boss' ? 3 : 1;
     const ghost: Ghost = {
@@ -708,7 +714,7 @@ export class GameScene extends Phaser.Scene {
   private defeatGhost(ghost: Ghost): void {
     ghost.alive = false;
     this.spawnMagicBurst(ghost.container.x, ghost.container.y, 0xffd700);
-    ghost.hintText.destroy();
+    // hintText is a container child — container.destroy() cleans it up
 
     this.tweens.add({
       targets: ghost.container,
@@ -724,7 +730,7 @@ export class GameScene extends Phaser.Scene {
   private ghostEscapes(ghost: Ghost): void {
     if (!ghost.alive) return;
     ghost.alive = false;
-    ghost.hintText.destroy();
+    // hintText is a container child — fades and is destroyed with the container
 
     this.lives--;
     this.events.emit('uiLives', this.lives);
@@ -978,9 +984,6 @@ export class GameScene extends Phaser.Scene {
       // Eye wiggle (idle life)
       ghost.eyeL.x = Math.sin(this.elapsed / 400 + ghost.floatSeed) * 2;
       ghost.eyeR.x = Math.sin(this.elapsed / 400 + ghost.floatSeed) * 2;
-
-      // Update hint text position
-      ghost.hintText.setPosition(ghost.container.x, ghost.container.y - (ghost.type === 'boss' ? 120 : 85));
 
       // Escape check
       if (ghost.container.y > escapeY) {
