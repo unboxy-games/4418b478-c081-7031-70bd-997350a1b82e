@@ -585,56 +585,55 @@ export class GameScene extends Phaser.Scene {
     const minY = Math.min(...ys), maxY = Math.max(...ys);
     const w = maxX - minX;
     const h = maxY - minY;
-    if (w < 40 && h < 40) return null; // too small
+    if (w < 35 && h < 35) return null; // too small — ignore tiny scribbles
 
     const start = pts[0];
     const end = pts[pts.length - 1];
     const startEndDist = Math.hypot(end.x - start.x, end.y - start.y);
     const diagonal = Math.hypot(w, h);
-    const isClosed = startEndDist < diagonal * 0.42;
+    // Be lenient: accept loops where start→end gap is up to 50% of bounding diagonal
+    const isClosed = startEndDist < diagonal * 0.50;
 
+    // Smooth out mouse jitter before any angle analysis
     const smooth = this.smoothPath(pts);
 
     if (isClosed) {
       // ── Circle vs Triangle ──────────────────────────────────────────────
-      // Key insight: measure how uniform each point's distance is from the
-      // path centroid. A circle → all points ~equidistant → low CV.
-      // A triangle → corner points stick far out, edge midpoints are close → high CV.
-      // Mouse jitter cannot meaningfully change this ratio.
-      const cx = smooth.reduce((s, p) => s + p.x, 0) / smooth.length;
-      const cy = smooth.reduce((s, p) => s + p.y, 0) / smooth.length;
-      const dists = smooth.map(p => Math.hypot(p.x - cx, p.y - cy));
-      const avgD = dists.reduce((s, d) => s + d, 0) / dists.length;
-      if (avgD < 10) return null; // degenerate
-      const stdD = Math.sqrt(dists.reduce((s, d) => s + (d - avgD) ** 2, 0) / dists.length);
-      const cv = stdD / avgD; // coefficient of variation
-
-      // Empirically: drawn circles give CV ~0.05–0.15; triangles give CV ~0.22–0.40
-      if (cv < 0.20) return 'circle';
-      return 'triangle';
+      // Count corners with a HIGH threshold (1.2 rad ≈ 69°).
+      // Real triangle vertices produce ~120° exterior turns → well above 69°.
+      // Mouse jitter on a circle rarely exceeds 30–40° after smoothing → 0 detections.
+      const corners = this.countSharpCorners(smooth, 1.2);
+      if (corners >= 2) return 'triangle';
+      return 'circle';
 
     } else {
       // ── Lightning / zigzag ───────────────────────────────────────────────
       const xReversals = this.countXReversals(pts);
-      const sharpCorners = this.countSharpCorners(smooth);
-      if (xReversals >= 2 || sharpCorners >= 3) return 'lightning';
+      if (xReversals >= 2) return 'lightning';
       return null;
     }
   }
 
-  /** Count sharp direction changes (> 60°) for zigzag detection only. */
-  private countSharpCorners(pts: { x: number; y: number }[]): number {
-    const step = Math.max(1, Math.floor(pts.length / 20));
+  /**
+   * Count places in the path where direction changes sharply.
+   * Operates on an already-smoothed path; `threshold` is in radians.
+   * Triangle corners (≈120° exterior) exceed 1.2 rad easily.
+   * Circle curvature after smoothing stays well below 1.2 rad per sample step.
+   */
+  private countSharpCorners(pts: { x: number; y: number }[], threshold = 1.2): number {
+    const n = 24; // fixed sample count for consistency
+    const step = Math.max(1, Math.floor(pts.length / n));
     const sampled: { x: number; y: number }[] = [];
     for (let i = 0; i < pts.length; i += step) sampled.push(pts[i]);
 
     let corners = 0;
-    for (let i = 2; i < sampled.length - 2; i++) {
-      const a1 = Math.atan2(sampled[i].y - sampled[i - 2].y, sampled[i].x - sampled[i - 2].x);
-      const a2 = Math.atan2(sampled[i + 2].y - sampled[i].y, sampled[i + 2].x - sampled[i].x);
+    const look = 2;
+    for (let i = look; i < sampled.length - look; i++) {
+      const a1 = Math.atan2(sampled[i].y - sampled[i - look].y, sampled[i].x - sampled[i - look].x);
+      const a2 = Math.atan2(sampled[i + look].y - sampled[i].y, sampled[i + look].x - sampled[i].x);
       let diff = Math.abs(a2 - a1);
       if (diff > Math.PI) diff = 2 * Math.PI - diff;
-      if (diff > 1.05) corners++; // > ~60°
+      if (diff > threshold) corners++;
     }
     return corners;
   }
