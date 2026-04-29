@@ -31,7 +31,16 @@
 - Room browser: `rooms.list()` polled on a `Phaser.Time.TimerEvent`; poll stopped in `clearMain()` / on Back / on scene shutdown
 - `joinRoomById()` uses `rooms.joinById(roomId, ...)` and drives first render from `onStateChange` (same state-timing guard as joinOrCreate)
 
-## Changes This Turn
+## Changes This Turn — Pixel-Art Visual Restyle
+- **LobbyScene**: dark navy (#1a2744) background with pixel grid overlay; corner accent blocks; BLOKUS title now rendered on a scroll-banner graphic (cream fill, orange border); subtitle added
+- **Menu buttons**: replaced rounded glass style with pixel-art raised buttons (cream #ede8cf body, orange #c07830 border, brown shadow, top-left highlight, "press down" animation on click)
+- **Lobby waiting / room browser panels**: replaced with pixel blue panels (#2e4a8a body, #3d5fa0 face, #6080c8 border, highlight lines); section labels use cream pixel scroll badges; player list rows use cream boxes with color swatches
+- **Difficulty picker cards**: cream body when selected/hovered, dark blue otherwise; color stripe on left edge; orange border
+- **GameScene**: background is deep navy + pixel grid; right panel is pixel blue panel; board cells use darker navy palette with square corner markers; HUD turn text in a pixel dark box; "YOUR PIECES" label is a cream pixel scroll badge; thumbnails start Y adjusted to clear the label
+- **Control buttons (ROTATE/FLIP/PASS/PLACE)**: pixel-art cream buttons matching lobby style
+- **Game-over overlay**: pixel blue panel with cream scroll title banner, winner name in player color
+
+## Previous Changes (chat iPad fix)
 - Fixed chat input not showing keyboard on iPad/Android touch devices:
   - Added `touchstart` listener on the `<input>` element with `e.stopPropagation()` and synchronous `inputEl.focus()` — this prevents Phaser from calling `preventDefault()` on the event (which blocks browser tap-to-focus) and ensures the soft keyboard opens on iOS Safari / Android Chrome
   - Added `touchAction: 'manipulation'` to the input style to prevent double-tap zoom delay on iOS

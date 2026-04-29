@@ -333,16 +333,22 @@ export class GameScene extends Phaser.Scene {
 
   private buildBackground(): void {
     const gfx = this.add.graphics().setDepth(0);
-    gfx.fillGradientStyle(0x0d1b2a, 0x0d1b2a, 0x0a1628, 0x0a1628, 1);
+    // Deep navy pixel-art background
+    gfx.fillStyle(0x1a2744, 1);
     gfx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-    // Left margin accent
-    gfx.fillStyle(0xffffff, 0.015);
-    gfx.fillRect(0, 0, BOARD_ORIG_X - 4, GAME_HEIGHT);
+    // Pixel grid overlay
+    gfx.fillStyle(0x233460, 0.3);
+    for (let x = 0; x < GAME_WIDTH; x += 8) {
+      for (let y = 0; y < GAME_HEIGHT; y += 8) {
+        gfx.fillRect(x, y, 1, 1);
+      }
+    }
 
-    // Subtle vignette at board edges
-    gfx.fillStyle(0x000000, 0.15);
+    // Top bar
+    gfx.fillStyle(0x0e1a30, 0.6);
     gfx.fillRect(0, 0, GAME_WIDTH, BOARD_ORIG_Y - 2);
+    // Bottom bar
     gfx.fillRect(0, BOARD_ORIG_Y + BOARD_PX + 2, GAME_WIDTH, GAME_HEIGHT);
   }
 
@@ -364,33 +370,42 @@ export class GameScene extends Phaser.Scene {
     const g = this.boardBgGfx;
     g.clear();
 
-    // Board background panel
-    g.fillStyle(0x0f2033, 1);
-    g.fillRoundedRect(BOARD_ORIG_X - 4, BOARD_ORIG_Y - 4, BOARD_PX + 8, BOARD_PX + 8, 4);
+    // Board shadow
+    g.fillStyle(0x0a1020, 0.8);
+    g.fillRect(BOARD_ORIG_X - 2, BOARD_ORIG_Y - 2, BOARD_PX + 8, BOARD_PX + 8);
 
-    // Draw cells
+    // Board outer frame (pixel 3D border)
+    g.fillStyle(0x1a2744, 1);
+    g.fillRect(BOARD_ORIG_X - 4, BOARD_ORIG_Y - 4, BOARD_PX + 8, BOARD_PX + 8);
+    g.lineStyle(2, 0x4a6090, 1);
+    g.strokeRect(BOARD_ORIG_X - 4, BOARD_ORIG_Y - 4, BOARD_PX + 8, BOARD_PX + 8);
+
+    // Draw cells — alternating darker/lighter
     for (let row = 0; row < BOARD_ROWS; row++) {
       for (let col = 0; col < BOARD_COLS; col++) {
         const wx = BOARD_ORIG_X + col * CELL;
         const wy = BOARD_ORIG_Y + row * CELL;
         const dark = (col + row) % 2 === 0;
-        g.fillStyle(dark ? 0x132437 : 0x162a40, 1);
+        g.fillStyle(dark ? 0x1e2e50 : 0x223258, 1);
         g.fillRect(wx, wy, CELL, CELL);
-        // Grid lines
-        g.lineStyle(1, 0x1e3a5f, 0.5);
+        g.lineStyle(1, 0x2a3c68, 0.8);
         g.strokeRect(wx, wy, CELL, CELL);
       }
     }
 
-    // Corner markers
+    // Corner start markers — pixel colored squares
     for (let pi = 0; pi < 4; pi++) {
       const [cx, cy] = PLAYER_CORNERS[pi];
       const wx = BOARD_ORIG_X + cx * CELL;
       const wy = BOARD_ORIG_Y + cy * CELL;
-      g.fillStyle(PLAYER_COLORS[pi], 0.5);
-      g.fillTriangle(wx, wy, wx + CELL, wy, wx, wy + CELL);
-      g.lineStyle(2, PLAYER_COLORS[pi], 0.9);
+      g.fillStyle(PLAYER_COLORS[pi], 0.55);
+      g.fillRect(wx, wy, CELL, CELL);
+      g.lineStyle(2, PLAYER_COLORS[pi], 1);
       g.strokeRect(wx, wy, CELL, CELL);
+      // Pixel cross inside
+      g.fillStyle(0xffffff, 0.5);
+      g.fillRect(wx + CELL / 2 - 1, wy + 2, 2, CELL - 4);
+      g.fillRect(wx + 2, wy + CELL / 2 - 1, CELL - 4, 2);
     }
   }
 
@@ -468,37 +483,53 @@ export class GameScene extends Phaser.Scene {
     this.panelBg = this.add.graphics().setDepth(5);
     this.drawPanelBg();
 
-    // Turn text
-    this.turnText = this.add.text(PANEL_X + PANEL_W / 2, 30, '', {
-      fontSize: '18px', fontStyle: 'bold', color: '#ffffff', align: 'center',
+    // Turn text banner
+    const turnBannerGfx = this.add.graphics().setDepth(9);
+    turnBannerGfx.fillStyle(0x1a2744, 1);
+    turnBannerGfx.fillRect(PANEL_X + 4, 10, PANEL_W - 8, 32);
+    turnBannerGfx.lineStyle(2, 0xc07830, 0.7);
+    turnBannerGfx.strokeRect(PANEL_X + 4, 10, PANEL_W - 8, 32);
+
+    this.turnText = this.add.text(PANEL_X + PANEL_W / 2, 26, '', {
+      fontSize: '15px', fontStyle: 'bold', color: '#ede8cf', align: 'center',
     }).setOrigin(0.5).setDepth(10);
 
-    // Score texts (4 players)
-    const scoreY = 55;
+    // Score texts (4 players) — compact, pixel style
+    const scoreY = 54;
     for (let i = 0; i < 4; i++) {
-      const x = PANEL_X + 12 + i * (PANEL_W / 4);
+      const x = PANEL_X + 8 + i * (PANEL_W / 4);
       const t = this.add.text(x, scoreY, '', {
-        fontSize: '14px', color: '#' + PLAYER_COLORS[i].toString(16).padStart(6, '0'),
+        fontSize: '12px', color: '#' + PLAYER_COLORS[i].toString(16).padStart(6, '0'),
         align: 'left',
       }).setDepth(10);
       this.scoreTexts.push(t);
     }
 
-    // Difficulty badge (offline only; shows bot strength for this session)
+    // Difficulty badge (offline only)
     if (isOfflineMode) {
-      const diffColors: Record<string, string> = { easy: '#22c55e', medium: '#f59e0b', hard: '#ef4444' };
+      const diffColors: Record<string, string> = { easy: '#38a840', medium: '#d09020', hard: '#d04040' };
       const diffLabel = `BOT: ${botDifficulty.toUpperCase()}`;
-      const diffColor = diffColors[botDifficulty] ?? '#94a3b8';
-      const diffBadge = this.add.text(PANEL_X + PANEL_W / 2, 76, diffLabel, {
+      const diffColor = diffColors[botDifficulty] ?? '#8090b8';
+      const badgeGfx = this.add.graphics().setDepth(9);
+      badgeGfx.fillStyle(0x1a2744, 1);
+      badgeGfx.fillRect(PANEL_X + PANEL_W / 2 - 44, 70, 88, 18);
+      badgeGfx.lineStyle(1, Phaser.Display.Color.HexStringToColor(diffColor).color, 0.7);
+      badgeGfx.strokeRect(PANEL_X + PANEL_W / 2 - 44, 70, 88, 18);
+      const diffBadge = this.add.text(PANEL_X + PANEL_W / 2, 79, diffLabel, {
         fontSize: '11px', fontStyle: 'bold', color: diffColor, letterSpacing: 2, align: 'center',
-      }).setOrigin(0.5).setDepth(10).setAlpha(0.75);
-      // Pulse the badge subtly
-      this.tweens.add({ targets: diffBadge, alpha: { from: 0.55, to: 0.95 }, yoyo: true, repeat: -1, duration: 2000 });
+      }).setOrigin(0.5).setDepth(10).setAlpha(0.85);
+      this.tweens.add({ targets: [diffBadge, badgeGfx], alpha: { from: 0.6, to: 1 }, yoyo: true, repeat: -1, duration: 2000 });
     }
 
-    // "Your Pieces" label
-    this.myPiecesLabel = this.add.text(PANEL_X + PANEL_W / 2, 87, 'YOUR PIECES', {
-      fontSize: '13px', color: '#64748b', letterSpacing: 3, align: 'center',
+    // "Your Pieces" label — pixel scroll style
+    const piecesLabelGfx = this.add.graphics().setDepth(9);
+    piecesLabelGfx.fillStyle(0xede8cf, 1);
+    piecesLabelGfx.fillRect(PANEL_X + PANEL_W / 2 - 60, isOfflineMode ? 91 : 76, 120, 18);
+    piecesLabelGfx.lineStyle(2, 0xc07830, 1);
+    piecesLabelGfx.strokeRect(PANEL_X + PANEL_W / 2 - 60, isOfflineMode ? 91 : 76, 120, 18);
+
+    this.myPiecesLabel = this.add.text(PANEL_X + PANEL_W / 2, isOfflineMode ? 100 : 85, 'YOUR PIECES', {
+      fontSize: '11px', fontStyle: 'bold', color: '#2a1a08', letterSpacing: 2, align: 'center',
     }).setOrigin(0.5).setDepth(10);
 
     this.buildPieceThumbnails();
@@ -507,10 +538,22 @@ export class GameScene extends Phaser.Scene {
   private drawPanelBg(): void {
     const g = this.panelBg;
     g.clear();
-    g.fillStyle(0x0c1a28, 0.95);
-    g.fillRoundedRect(PANEL_X - 2, 8, PANEL_W + 4, GAME_HEIGHT - 16, 8);
-    g.lineStyle(1, 0x1e3a5f, 0.6);
-    g.strokeRoundedRect(PANEL_X - 2, 8, PANEL_W + 4, GAME_HEIGHT - 16, 8);
+    // Shadow
+    g.fillStyle(0x0a1020, 0.7);
+    g.fillRect(PANEL_X + 2, 12, PANEL_W + 4, GAME_HEIGHT - 20);
+    // Blue pixel panel body
+    g.fillStyle(0x2e4a8a, 1);
+    g.fillRect(PANEL_X - 2, 8, PANEL_W + 4, GAME_HEIGHT - 16);
+    // Lighter face
+    g.fillStyle(0x3d5fa0, 1);
+    g.fillRect(PANEL_X + 2, 12, PANEL_W - 4, GAME_HEIGHT - 24);
+    // Pixel border
+    g.lineStyle(3, 0x6080c8, 1);
+    g.strokeRect(PANEL_X - 2, 8, PANEL_W + 4, GAME_HEIGHT - 16);
+    // Highlight top-left
+    g.fillStyle(0x6080c8, 0.4);
+    g.fillRect(PANEL_X + 2, 12, PANEL_W - 4, 2);
+    g.fillRect(PANEL_X + 2, 12, 2, GAME_HEIGHT - 24);
   }
 
   private buildPieceThumbnails(): void {
@@ -523,7 +566,8 @@ export class GameScene extends Phaser.Scene {
 
     const slotW = Math.floor(PANEL_W / THUMB_COLS);
     const slotH = THUMB_SIZE;
-    const startY = 106;
+    // Start below the "YOUR PIECES" label; label is at y≈91-109 offline, 76-94 online
+    const startY = isOfflineMode ? 112 : 97;
 
     for (let i = 0; i < allPieces.length; i++) {
       const name = allPieces[i];
@@ -580,8 +624,8 @@ export class GameScene extends Phaser.Scene {
     const offY = -(maxH * sc) / 2;
 
     if (!active) {
-      // Greyed out / used
-      gfx.fillStyle(0x1e3a5f, 0.3);
+      // Greyed out / used — dim pixel squares
+      gfx.fillStyle(0x2a3a60, 0.5);
       for (const [cx, cy] of cells) {
         gfx.fillRect(offX + cx * sc, offY + cy * sc, sc - 1, sc - 1);
       }
@@ -591,12 +635,12 @@ export class GameScene extends Phaser.Scene {
     const color = PLAYER_COLORS[this.myIdx];
     const selected = this.selectedPiece === name;
 
-    // Background for selected piece
+    // Background for selected piece — pixel cream box
     if (selected) {
-      gfx.fillStyle(color, 0.2);
-      gfx.fillRoundedRect(-(THUMB_SIZE / 2 - 2), -(THUMB_SIZE / 2 - 2), THUMB_SIZE - 4, THUMB_SIZE - 4, 6);
-      gfx.lineStyle(2, color, 0.9);
-      gfx.strokeRoundedRect(-(THUMB_SIZE / 2 - 2), -(THUMB_SIZE / 2 - 2), THUMB_SIZE - 4, THUMB_SIZE - 4, 6);
+      gfx.fillStyle(0xede8cf, 1);
+      gfx.fillRect(-(THUMB_SIZE / 2 - 2), -(THUMB_SIZE / 2 - 2), THUMB_SIZE - 4, THUMB_SIZE - 4);
+      gfx.lineStyle(2, 0xc07830, 1);
+      gfx.strokeRect(-(THUMB_SIZE / 2 - 2), -(THUMB_SIZE / 2 - 2), THUMB_SIZE - 4, THUMB_SIZE - 4);
     }
 
     // Draw piece cells
@@ -687,13 +731,23 @@ export class GameScene extends Phaser.Scene {
     this.placeBtnGfx.clear();
     if (!show) return;
 
-    const color = (canShow && this.hoverTile && valid) ? 0x22c55e : 0x374151;
-    const alpha = (canShow && this.hoverTile && valid) ? 0.4 : 0.15;
-    this.placeBtnGfx.fillStyle(color, alpha);
-    this.placeBtnGfx.fillRoundedRect(x, y, w, h, 10);
-    this.placeBtnGfx.lineStyle(2, color, (canShow && this.hoverTile && valid) ? 1 : 0.3);
-    this.placeBtnGfx.strokeRoundedRect(x, y, w, h, 10);
-    this.placeBtnTxt.setColor((canShow && this.hoverTile && valid) ? '#22c55e' : '#64748b');
+    const isValid = canShow && this.hoverTile && valid;
+    // Shadow
+    this.placeBtnGfx.fillStyle(0x7a4e18, 1);
+    this.placeBtnGfx.fillRect(x + 3, y + 3, w, h);
+    // Body
+    this.placeBtnGfx.fillStyle(isValid ? 0xede8cf : 0x2a3a60, 1);
+    this.placeBtnGfx.fillRect(x, y, w, h);
+    // Border
+    this.placeBtnGfx.lineStyle(2, isValid ? 0xc07830 : 0x4a5a80, 1);
+    this.placeBtnGfx.strokeRect(x, y, w, h);
+    // Highlight
+    if (isValid) {
+      this.placeBtnGfx.fillStyle(0xfaf6e8, 1);
+      this.placeBtnGfx.fillRect(x + 2, y + 2, w - 4, 2);
+      this.placeBtnGfx.fillRect(x + 2, y + 2, 2, h - 4);
+    }
+    this.placeBtnTxt.setColor(isValid ? '#2a1a08' : '#4a5a80');
     if (this.placeBtnZone.input) {
       this.placeBtnZone.input.enabled = !!(canShow && this.hoverTile && valid);
     }
@@ -701,28 +755,43 @@ export class GameScene extends Phaser.Scene {
 
   private makeControlBtn(
     x: number, y: number, w: number, h: number,
-    label: string, color: number,
+    label: string, _color: number,
     callback: () => void
   ): Phaser.GameObjects.Graphics {
     const gfx = this.add.graphics().setDepth(10);
-    const drawBtn = (hover: boolean) => {
+    const drawBtn = (hover: boolean, pressed: boolean) => {
       gfx.clear();
-      gfx.fillStyle(color, hover ? 0.4 : 0.2);
-      gfx.fillRoundedRect(x, y, w, h, 8);
-      gfx.lineStyle(1, color, hover ? 1 : 0.6);
-      gfx.strokeRoundedRect(x, y, w, h, 8);
+      const sh = pressed ? 0 : 3;
+      // Shadow
+      gfx.fillStyle(0x7a4e18, 1);
+      gfx.fillRect(x + sh, y + sh, w, h);
+      // Body
+      gfx.fillStyle(hover ? 0xf0e8d0 : 0xede8cf, 1);
+      gfx.fillRect(x, y, w, h);
+      // Orange border
+      gfx.lineStyle(2, 0xc07830, 1);
+      gfx.strokeRect(x, y, w, h);
+      // Highlight top-left
+      gfx.fillStyle(0xfaf6e8, 1);
+      gfx.fillRect(x + 2, y + 2, w - 4, 2);
+      gfx.fillRect(x + 2, y + 2, 2, h - 4);
+      // Bottom-right inner shadow
+      gfx.fillStyle(0xc07830, 0.3);
+      gfx.fillRect(x + 2, y + h - 4, w - 4, 2);
+      gfx.fillRect(x + w - 4, y + 2, 2, h - 4);
     };
-    drawBtn(false);
+    drawBtn(false, false);
 
     const txt = this.add.text(x + w / 2, y + h / 2, label, {
-      fontSize: '13px', color: '#ffffff', align: 'center',
+      fontSize: '12px', fontStyle: 'bold', color: '#2a1a08', align: 'center',
     }).setOrigin(0.5).setDepth(11);
 
     const zone = this.add.zone(x + w / 2, y + h / 2, w, h)
       .setInteractive().setDepth(12);
-    zone.on('pointerover', () => drawBtn(true));
-    zone.on('pointerout', () => drawBtn(false));
-    zone.on('pointerdown', callback);
+    zone.on('pointerover', () => { drawBtn(true, false); txt.setColor('#4060c8'); });
+    zone.on('pointerout', () => { drawBtn(false, false); txt.setColor('#2a1a08'); });
+    zone.on('pointerdown', () => { drawBtn(false, true); txt.setY(y + h / 2 + 2); });
+    zone.on('pointerup', () => { drawBtn(false, false); txt.setY(y + h / 2); callback(); });
 
     void txt;
     return gfx;
@@ -1111,44 +1180,69 @@ export class GameScene extends Phaser.Scene {
 
     const overlay = this.add.container(GAME_WIDTH / 2, GAME_HEIGHT / 2).setDepth(1000);
 
+    // Pixel panel — shadow + blue body
     const bg = this.add.graphics();
-    bg.fillStyle(0x000000, 0.75);
-    bg.fillRoundedRect(-320, -200, 640, 400, 20);
-    bg.lineStyle(3, PLAYER_COLORS[winner] ?? 0xffffff, 1);
-    bg.strokeRoundedRect(-320, -200, 640, 400, 20);
+    bg.fillStyle(0x0a1020, 0.85);
+    bg.fillRect(-316, -196, 640, 400);
+    bg.fillStyle(0x2e4a8a, 1);
+    bg.fillRect(-320, -200, 640, 400);
+    bg.fillStyle(0x3d5fa0, 1);
+    bg.fillRect(-316, -196, 632, 392);
+    bg.lineStyle(4, PLAYER_COLORS[winner] ?? 0x6080c8, 1);
+    bg.strokeRect(-320, -200, 640, 400);
+    bg.fillStyle((PLAYER_COLORS[winner] ?? 0x6080c8), 0.15);
+    bg.fillRect(-316, -196, 632, 392);
+    // Top highlight
+    bg.fillStyle(0x6080c8, 0.5);
+    bg.fillRect(-316, -196, 632, 2);
+    bg.fillRect(-316, -196, 2, 392);
     overlay.add(bg);
 
-    const title = this.add.text(0, -145, 'GAME OVER', {
-      fontSize: '42px', fontStyle: 'bold', color: '#f59e0b',
+    // Scroll banner title
+    const titleBanner = this.add.graphics();
+    titleBanner.fillStyle(0xede8cf, 1);
+    titleBanner.fillRect(-130, -190, 260, 36);
+    titleBanner.lineStyle(3, 0xc07830, 1);
+    titleBanner.strokeRect(-130, -190, 260, 36);
+    overlay.add(titleBanner);
+
+    const title = this.add.text(0, -172, 'GAME OVER', {
+      fontSize: '22px', fontStyle: 'bold', color: '#2a1a08', letterSpacing: 3,
     }).setOrigin(0.5);
     overlay.add(title);
 
     const winColor = '#' + (PLAYER_COLORS[winner] ?? 0xffffff).toString(16).padStart(6, '0');
-    const winText = this.add.text(0, -90, `${PLAYER_NAMES[winner] ?? 'Unknown'} WINS!`, {
-      fontSize: '30px', fontStyle: 'bold', color: winColor,
+    const winText = this.add.text(0, -118, `★  ${PLAYER_NAMES[winner] ?? 'Unknown'} WINS!  ★`, {
+      fontSize: '26px', fontStyle: 'bold', color: winColor,
+      stroke: '#2a1a08', strokeThickness: 3,
     }).setOrigin(0.5);
     overlay.add(winText);
 
     let scoreStr = '';
     for (let i = 0; i < this.playerCount; i++) {
       const rem = countRemainingCells(this.playerPieces[i] ?? []);
-      scoreStr += `${PLAYER_NAMES[i]}: ${this.scores[i] ?? 0} pts  (${rem} remaining)\n`;
+      scoreStr += `${PLAYER_NAMES[i]}: ${this.scores[i] ?? 0} pts  (${rem} left)\n`;
     }
-    const scoreText = this.add.text(0, 0, scoreStr.trim(), {
-      fontSize: '18px', color: '#94a3b8', align: 'center', lineSpacing: 8,
+    const scoreText = this.add.text(0, -10, scoreStr.trim(), {
+      fontSize: '16px', color: '#ede8cf', align: 'center', lineSpacing: 10,
     }).setOrigin(0.5);
     overlay.add(scoreText);
 
-    // Play again button
+    // Pixel back button
     const btnBg = this.add.graphics();
-    btnBg.fillStyle(0x3b82f6, 0.3);
-    btnBg.fillRoundedRect(-110, 115, 220, 50, 10);
-    btnBg.lineStyle(2, 0x3b82f6, 1);
-    btnBg.strokeRoundedRect(-110, 115, 220, 50, 10);
+    btnBg.fillStyle(0x7a4e18, 1);
+    btnBg.fillRect(-106, 122, 220, 46);
+    btnBg.fillStyle(0xede8cf, 1);
+    btnBg.fillRect(-110, 118, 220, 46);
+    btnBg.lineStyle(2, 0xc07830, 1);
+    btnBg.strokeRect(-110, 118, 220, 46);
+    btnBg.fillStyle(0xfaf6e8, 1);
+    btnBg.fillRect(-107, 120, 214, 3);
+    btnBg.fillRect(-107, 120, 3, 40);
     overlay.add(btnBg);
 
-    const btnTxt = this.add.text(0, 140, 'BACK TO LOBBY', {
-      fontSize: '18px', fontStyle: 'bold', color: '#ffffff',
+    const btnTxt = this.add.text(0, 141, 'BACK TO LOBBY', {
+      fontSize: '16px', fontStyle: 'bold', color: '#2a1a08',
     }).setOrigin(0.5);
     overlay.add(btnTxt);
 

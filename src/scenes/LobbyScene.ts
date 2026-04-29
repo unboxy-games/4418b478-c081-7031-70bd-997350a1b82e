@@ -37,7 +37,7 @@ export class LobbyScene extends Phaser.Scene {
     this.createTitle();
     this.mainContainer = this.add.container(0, 0).setDepth(5);
     this.statusText = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'Initializing...', {
-      fontSize: '22px', color: '#94a3b8', align: 'center',
+      fontSize: '20px', color: '#8090b8', align: 'center',
     }).setOrigin(0.5).setDepth(10);
 
     this.initPlatform();
@@ -64,80 +64,102 @@ export class LobbyScene extends Phaser.Scene {
 
   private createBackground(): void {
     const gfx = this.add.graphics().setDepth(0);
-    // Dark gradient background
-    gfx.fillGradientStyle(0x0d1b2a, 0x0d1b2a, 0x112240, 0x112240, 1);
+
+    // Deep navy pixel-art background
+    gfx.fillStyle(0x1a2744, 1);
     gfx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-    // Decorative grid dots
-    gfx.fillStyle(0xffffff, 0.04);
-    for (let x = 40; x < GAME_WIDTH; x += 40) {
-      for (let y = 40; y < GAME_HEIGHT; y += 40) {
-        gfx.fillCircle(x, y, 1.5);
+    // Subtle pixel grid overlay — tiny 2×2 squares on an 8px grid
+    gfx.fillStyle(0x233460, 0.35);
+    for (let x = 0; x < GAME_WIDTH; x += 8) {
+      for (let y = 0; y < GAME_HEIGHT; y += 8) {
+        gfx.fillRect(x, y, 1, 1);
       }
     }
 
-    // Corner color swatches
+    // Decorative corner pixel blocks (player colors, pixel-art style)
     const corners = [
-      { x: 80, y: 80, color: PLAYER_COLORS[0] },
-      { x: GAME_WIDTH - 80, y: GAME_HEIGHT - 80, color: PLAYER_COLORS[1] },
-      { x: GAME_WIDTH - 80, y: 80, color: PLAYER_COLORS[2] },
-      { x: 80, y: GAME_HEIGHT - 80, color: PLAYER_COLORS[3] },
+      { x: 32, y: 32, color: PLAYER_COLORS[0] },
+      { x: GAME_WIDTH - 64, y: GAME_HEIGHT - 64, color: PLAYER_COLORS[1] },
+      { x: GAME_WIDTH - 64, y: 32, color: PLAYER_COLORS[2] },
+      { x: 32, y: GAME_HEIGHT - 64, color: PLAYER_COLORS[3] },
     ];
     for (const c of corners) {
-      gfx.fillStyle(c.color, 0.15);
-      gfx.fillCircle(c.x, c.y, 60);
+      // pixel mosaic cluster
+      gfx.fillStyle(c.color, 0.22);
+      gfx.fillRect(c.x, c.y, 32, 32);
+      gfx.fillStyle(c.color, 0.12);
+      gfx.fillRect(c.x - 8, c.y - 8, 48, 48);
       gfx.fillStyle(c.color, 0.06);
-      gfx.fillCircle(c.x, c.y, 120);
+      gfx.fillRect(c.x - 16, c.y - 16, 64, 64);
     }
   }
 
   private createTitle(): void {
-    const subtitle = this.add.text(GAME_WIDTH / 2, 155, 'ONLINE MULTIPLAYER', {
-      fontSize: '18px',
-      color: '#64748b',
-      letterSpacing: 6,
-    }).setOrigin(0.5).setDepth(10);
+    // Pixel-art scroll banner behind the title
+    const bx = GAME_WIDTH / 2;
+    const bannerGfx = this.add.graphics().setDepth(9);
+    const bw = 480, bh = 64, by = 68;
+    // Main banner body
+    bannerGfx.fillStyle(0xede8cf, 1);
+    bannerGfx.fillRect(bx - bw / 2, by, bw, bh);
+    // Top/bottom dark border lines
+    bannerGfx.fillStyle(0xc07830, 1);
+    bannerGfx.fillRect(bx - bw / 2, by, bw, 3);
+    bannerGfx.fillRect(bx - bw / 2, by + bh - 3, bw, 3);
+    // Scroll ends (left)
+    bannerGfx.fillStyle(0xede8cf, 1);
+    bannerGfx.fillRect(bx - bw / 2 - 16, by - 4, 18, bh + 8);
+    bannerGfx.fillStyle(0xc07830, 1);
+    bannerGfx.fillRect(bx - bw / 2 - 16, by - 4, 18, 3);
+    bannerGfx.fillRect(bx - bw / 2 - 16, by + bh + 1, 18, 3);
+    bannerGfx.fillRect(bx - bw / 2 - 16, by - 4, 3, bh + 8);
+    // Scroll ends (right)
+    bannerGfx.fillStyle(0xede8cf, 1);
+    bannerGfx.fillRect(bx + bw / 2 - 2, by - 4, 18, bh + 8);
+    bannerGfx.fillStyle(0xc07830, 1);
+    bannerGfx.fillRect(bx + bw / 2 - 2, by - 4, 18, 3);
+    bannerGfx.fillRect(bx + bw / 2 - 2, by + bh + 1, 18, 3);
+    bannerGfx.fillRect(bx + bw / 2 + 13, by - 4, 3, bh + 8);
+    // Subtle inner line accents
+    bannerGfx.fillStyle(0xd4a050, 0.4);
+    bannerGfx.fillRect(bx - bw / 2 + 6, by + 8, bw - 12, 1);
+    bannerGfx.fillRect(bx - bw / 2 + 6, by + bh - 9, bw - 12, 1);
 
-    // Render each letter individually so colors never overlap a duplicate base text
-    const colors = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#3b82f6', '#ef4444'];
+    // Letters — pixel-bold, dark brown on cream
+    const colors = ['#4060c8', '#d04040', '#38a840', '#d09020', '#4060c8', '#d04040'];
     const letters = 'BLOKUS'.split('');
     const letterObjs: Phaser.GameObjects.Text[] = [];
-
-    // Measure total width first using a temp text (destroyed immediately)
-    const letterW = 58; // approximate per-character width for 72px bold
-    const gap = 8;
+    const letterW = 54, gap = 6;
     const totalW = letters.length * letterW + (letters.length - 1) * gap;
     const startX = GAME_WIDTH / 2 - totalW / 2 + letterW / 2;
 
     for (let i = 0; i < letters.length; i++) {
-      const lt = this.add.text(startX + i * (letterW + gap), 90, letters[i], {
-        fontSize: '72px',
+      const lt = this.add.text(startX + i * (letterW + gap), by + bh / 2, letters[i], {
+        fontSize: '52px',
         fontStyle: 'bold',
         color: colors[i],
-        stroke: '#0d1b2a',
-        strokeThickness: 6,
-      }).setOrigin(0.5).setDepth(10);
+        stroke: '#2a1a08',
+        strokeThickness: 4,
+      }).setOrigin(0.5).setDepth(11);
       letterObjs.push(lt);
 
       this.tweens.add({
         targets: lt,
-        alpha: { from: 0.8, to: 1 },
+        y: { from: by + bh / 2 - 1, to: by + bh / 2 + 1 },
         yoyo: true, repeat: -1,
-        duration: 1800 + i * 300,
+        duration: 1600 + i * 200,
         ease: 'Sine.easeInOut',
       });
     }
 
-    // Pulse the whole title group
-    this.tweens.add({
-      targets: letterObjs,
-      scaleX: 1.03, scaleY: 1.03,
-      yoyo: true, repeat: -1,
-      duration: 2500,
-      ease: 'Sine.easeInOut',
-    });
-
-    void subtitle;
+    // Subtitle in pixel style below banner
+    this.add.text(GAME_WIDTH / 2, by + bh + 18, '— STRATEGY BOARD GAME —', {
+      fontSize: '13px',
+      fontStyle: 'bold',
+      color: '#8090b8',
+      letterSpacing: 4,
+    }).setOrigin(0.5).setDepth(10);
   }
 
   private showMainMenu(): void {
@@ -171,10 +193,17 @@ export class LobbyScene extends Phaser.Scene {
 
     const cx = GAME_WIDTH / 2;
 
-    // Title
-    const titleTxt = this.add.text(cx, 218, 'BOT DIFFICULTY', {
-      fontSize: '16px', color: '#64748b', letterSpacing: 6,
-    }).setOrigin(0.5).setDepth(10);
+    // Pixel scroll title
+    const titleGfx = this.add.graphics().setDepth(10);
+    titleGfx.fillStyle(0xede8cf, 1);
+    titleGfx.fillRect(cx - 100, 208, 200, 26);
+    titleGfx.lineStyle(2, 0xc07830, 1);
+    titleGfx.strokeRect(cx - 100, 208, 200, 26);
+    this.mainContainer.add(titleGfx as any);
+
+    const titleTxt = this.add.text(cx, 221, 'BOT DIFFICULTY', {
+      fontSize: '13px', fontStyle: 'bold', color: '#2a1a08', letterSpacing: 4,
+    }).setOrigin(0.5).setDepth(11);
     this.mainContainer.add(titleTxt as any);
 
     const levels: Array<{
@@ -188,37 +217,52 @@ export class LobbyScene extends Phaser.Scene {
       { key: 'hard',   label: '⭐⭐⭐  HARD',  color: 0xef4444, desc: 'Bots play aggressively and very consistently'   },
     ];
 
-    const CARD_W = 560, CARD_H = 100, CARD_GAP = 18;
-    const startY = 268;
+    const CARD_W = 560, CARD_H = 90, CARD_GAP = 14;
+    const startY = 260;
 
     levels.forEach((lvl, i) => {
       const y = startY + i * (CARD_H + CARD_GAP);
       const isSelected = botDifficulty === lvl.key;
-      const alpha = isSelected ? 0.35 : 0.14;
+      const colorHex = '#' + lvl.color.toString(16).padStart(6, '0');
 
       const cardGfx = this.add.graphics().setDepth(10);
       const drawCard = (hovered: boolean) => {
         cardGfx.clear();
-        cardGfx.fillStyle(lvl.color, hovered || isSelected ? 0.32 : alpha);
-        cardGfx.fillRoundedRect(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 14);
-        cardGfx.lineStyle(isSelected ? 3 : 2, lvl.color, isSelected ? 1 : (hovered ? 0.9 : 0.5));
-        cardGfx.strokeRoundedRect(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H, 14);
+        // Shadow
+        cardGfx.fillStyle(0x0a1020, 0.6);
+        cardGfx.fillRect(-CARD_W / 2 + 4, -CARD_H / 2 + 4, CARD_W, CARD_H);
+        // Body — cream if selected/hovered, dark blue otherwise
+        if (isSelected || hovered) {
+          cardGfx.fillStyle(0xede8cf, 1);
+        } else {
+          cardGfx.fillStyle(0x2e4070, 1);
+        }
+        cardGfx.fillRect(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H);
+        // Color stripe on left
+        cardGfx.fillStyle(lvl.color, 1);
+        cardGfx.fillRect(-CARD_W / 2, -CARD_H / 2, 8, CARD_H);
+        // Border
+        cardGfx.lineStyle(isSelected ? 3 : 2, lvl.color, 1);
+        cardGfx.strokeRect(-CARD_W / 2, -CARD_H / 2, CARD_W, CARD_H);
+        // Highlight line
+        cardGfx.fillStyle(0xfaf6e8, isSelected ? 0.4 : 0.15);
+        cardGfx.fillRect(-CARD_W / 2 + 8, -CARD_H / 2 + 2, CARD_W - 10, 2);
       };
       drawCard(false);
 
-      const labelTxt = this.add.text(-CARD_W / 2 + 28, -18, lvl.label, {
-        fontSize: '22px', fontStyle: 'bold',
-        color: '#' + lvl.color.toString(16).padStart(6, '0'),
+      const textColor = isSelected ? '#2a1a08' : colorHex;
+      const labelTxt = this.add.text(-CARD_W / 2 + 24, -16, lvl.label, {
+        fontSize: '20px', fontStyle: 'bold', color: textColor,
       }).setOrigin(0, 0.5).setDepth(11);
 
-      const descTxt = this.add.text(-CARD_W / 2 + 28, 20, lvl.desc, {
-        fontSize: '15px', color: '#94a3b8',
+      const descTxt = this.add.text(-CARD_W / 2 + 24, 16, lvl.desc, {
+        fontSize: '14px', color: isSelected ? '#4a3010' : '#8090b8',
       }).setOrigin(0, 0.5).setDepth(11);
 
-      // "SELECTED" badge
-      const badgeTxt = this.add.text(CARD_W / 2 - 24, 0, isSelected ? '✓ SELECTED' : 'SELECT', {
+      const badgeTxt = this.add.text(CARD_W / 2 - 20, 0,
+        isSelected ? '✓ SELECTED' : 'SELECT', {
         fontSize: '13px', fontStyle: 'bold',
-        color: isSelected ? '#' + lvl.color.toString(16).padStart(6, '0') : '#475569',
+        color: isSelected ? colorHex : '#5060a0',
       }).setOrigin(1, 0.5).setDepth(11);
 
       const cont = this.add.container(cx, y + CARD_H / 2, [cardGfx, labelTxt, descTxt, badgeTxt])
@@ -230,15 +274,18 @@ export class LobbyScene extends Phaser.Scene {
 
       cont.on('pointerover', () => {
         drawCard(true);
+        labelTxt.setColor('#2a1a08');
+        descTxt.setColor('#4a3010');
         this.tweens.add({ targets: cont, scaleX: 1.02, scaleY: 1.02, duration: 80 });
       });
       cont.on('pointerout', () => {
         drawCard(false);
+        labelTxt.setColor(isSelected ? '#2a1a08' : colorHex);
+        descTxt.setColor(isSelected ? '#4a3010' : '#8090b8');
         this.tweens.add({ targets: cont, scaleX: 1, scaleY: 1, duration: 80 });
       });
       cont.on('pointerdown', () => {
         setBotDifficulty(lvl.key);
-        // Persist to saves (best-effort)
         if (this.unboxy) {
           this.unboxy.saves.get('settings').then((existing: Record<string, any> | null) => {
             return this.unboxy.saves.set('settings', { ...(existing ?? {}), botDifficulty: lvl.key });
@@ -263,18 +310,39 @@ export class LobbyScene extends Phaser.Scene {
     label: string,
     x: number,
     y: number,
-    color: number,
+    _color: number,
     callback: () => void
   ): Phaser.GameObjects.Container {
-    const w = 340, h = 56;
+    const w = 340, h = 48;
     const bg = this.add.graphics();
-    bg.fillStyle(color, 0.2);
-    bg.fillRoundedRect(-w / 2, -h / 2, w, h, 12);
-    bg.lineStyle(2, color, 0.8);
-    bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 12);
 
-    const text = this.add.text(0, 0, label, {
-      fontSize: '20px', fontStyle: 'bold', color: '#ffffff', align: 'center',
+    const drawBtn = (pressed: boolean) => {
+      bg.clear();
+      const sh = pressed ? 0 : 4; // shadow offset (raised vs pressed)
+      // Shadow / depth layer
+      bg.fillStyle(0x7a4e18, 1);
+      bg.fillRect(-w / 2 + sh, -h / 2 + sh, w, h);
+      // Main cream body
+      bg.fillStyle(0xede8cf, 1);
+      bg.fillRect(-w / 2, -h / 2, w, h);
+      // Orange border
+      bg.lineStyle(3, 0xc07830, 1);
+      bg.strokeRect(-w / 2, -h / 2, w, h);
+      // Top-left pixel highlight
+      bg.fillStyle(0xfaf6e8, 1);
+      bg.fillRect(-w / 2 + 3, -h / 2 + 3, w - 6, 3);
+      bg.fillRect(-w / 2 + 3, -h / 2 + 3, 3, h - 6);
+      // Bottom-right inner shadow
+      bg.fillStyle(0xc07830, 0.35);
+      bg.fillRect(-w / 2 + 3, h / 2 - 6, w - 6, 3);
+      bg.fillRect(w / 2 - 6, -h / 2 + 3, 3, h - 6);
+    };
+    drawBtn(false);
+
+    const text = this.add.text(0, -1, label, {
+      fontSize: '18px', fontStyle: 'bold',
+      color: '#2a1a08',
+      align: 'center',
     }).setOrigin(0.5);
 
     const cont = this.add.container(x, y, [bg, text]).setDepth(10).setInteractive(
@@ -283,22 +351,24 @@ export class LobbyScene extends Phaser.Scene {
     );
 
     cont.on('pointerover', () => {
-      bg.clear();
-      bg.fillStyle(color, 0.45);
-      bg.fillRoundedRect(-w / 2, -h / 2, w, h, 12);
-      bg.lineStyle(2, color, 1);
-      bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 12);
-      this.tweens.add({ targets: cont, scaleX: 1.04, scaleY: 1.04, duration: 100 });
+      drawBtn(false);
+      text.setColor('#4060c8');
+      this.tweens.add({ targets: cont, scaleX: 1.03, scaleY: 1.03, duration: 80 });
     });
     cont.on('pointerout', () => {
-      bg.clear();
-      bg.fillStyle(color, 0.2);
-      bg.fillRoundedRect(-w / 2, -h / 2, w, h, 12);
-      bg.lineStyle(2, color, 0.8);
-      bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 12);
-      this.tweens.add({ targets: cont, scaleX: 1, scaleY: 1, duration: 100 });
+      drawBtn(false);
+      text.setColor('#2a1a08');
+      this.tweens.add({ targets: cont, scaleX: 1, scaleY: 1, duration: 80 });
     });
-    cont.on('pointerdown', callback);
+    cont.on('pointerdown', () => {
+      drawBtn(true);
+      text.setY(2);
+    });
+    cont.on('pointerup', () => {
+      drawBtn(false);
+      text.setY(-1);
+      callback();
+    });
 
     this.mainContainer.add(cont);
     return cont;
@@ -333,19 +403,38 @@ export class LobbyScene extends Phaser.Scene {
     this.clearMain();
     const cx = GAME_WIDTH / 2;
 
-    const label = this.add.text(cx, 270, 'Enter Room Code:', {
-      fontSize: '22px', color: '#94a3b8',
-    }).setOrigin(0.5).setDepth(10);
+    // Pixel panel
+    const panelGfx = this.add.graphics().setDepth(8);
+    panelGfx.fillStyle(0x0a1020, 0.7);
+    panelGfx.fillRect(cx - 228, 242, 460, 240);
+    panelGfx.fillStyle(0x2e4a8a, 1);
+    panelGfx.fillRect(cx - 230, 240, 460, 240);
+    panelGfx.fillStyle(0x3d5fa0, 1);
+    panelGfx.fillRect(cx - 226, 244, 452, 232);
+    panelGfx.lineStyle(3, 0x6080c8, 1);
+    panelGfx.strokeRect(cx - 230, 240, 460, 240);
+    this.mainContainer.add(panelGfx as any);
 
-    // Input box
+    const labelGfx = this.add.graphics().setDepth(10);
+    labelGfx.fillStyle(0xede8cf, 1);
+    labelGfx.fillRect(cx - 100, 252, 200, 24);
+    labelGfx.lineStyle(2, 0xc07830, 1);
+    labelGfx.strokeRect(cx - 100, 252, 200, 24);
+    this.mainContainer.add(labelGfx as any);
+
+    const label = this.add.text(cx, 264, 'ENTER ROOM CODE', {
+      fontSize: '12px', fontStyle: 'bold', color: '#2a1a08', letterSpacing: 2,
+    }).setOrigin(0.5).setDepth(11);
+
+    // Pixel input box
     const inputBg = this.add.graphics().setDepth(10);
-    inputBg.fillStyle(0x1e3a5f, 0.9);
-    inputBg.fillRoundedRect(cx - 160, 300, 320, 60, 10);
-    inputBg.lineStyle(2, 0x3b82f6, 0.8);
-    inputBg.strokeRoundedRect(cx - 160, 300, 320, 60, 10);
+    inputBg.fillStyle(0x1a2744, 1);
+    inputBg.fillRect(cx - 150, 284, 300, 54);
+    inputBg.lineStyle(2, 0xc07830, 1);
+    inputBg.strokeRect(cx - 150, 284, 300, 54);
 
-    this.joinInputText = this.add.text(cx, 330, '|', {
-      fontSize: '30px', fontStyle: 'bold', color: '#ffffff', align: 'center',
+    this.joinInputText = this.add.text(cx, 311, '|', {
+      fontSize: '28px', fontStyle: 'bold', color: '#f0c060', align: 'center',
     }).setOrigin(0.5).setDepth(11);
 
     this.joinCodeInput = '';
@@ -439,30 +528,44 @@ export class LobbyScene extends Phaser.Scene {
 
     const cx = GAME_WIDTH / 2;
 
-    // Panel background
+    // Pixel panel — shadow + blue body
     const panelGfx = this.add.graphics().setDepth(8);
-    panelGfx.fillStyle(0x0d1b2a, 0.92);
-    panelGfx.fillRoundedRect(cx - 460, 195, 920, 390, 14);
-    panelGfx.lineStyle(2, 0xf59e0b, 0.5);
-    panelGfx.strokeRoundedRect(cx - 460, 195, 920, 390, 14);
+    panelGfx.fillStyle(0x0a1020, 0.7);
+    panelGfx.fillRect(cx - 458, 197, 920, 400);
+    panelGfx.fillStyle(0x2e4a8a, 1);
+    panelGfx.fillRect(cx - 460, 195, 920, 400);
+    panelGfx.fillStyle(0x3d5fa0, 1);
+    panelGfx.fillRect(cx - 456, 199, 912, 392);
+    panelGfx.lineStyle(3, 0x6080c8, 1);
+    panelGfx.strokeRect(cx - 460, 195, 920, 400);
+    panelGfx.fillStyle(0x6080c8, 0.4);
+    panelGfx.fillRect(cx - 456, 199, 912, 2);
+    panelGfx.fillRect(cx - 456, 199, 2, 392);
     this.mainContainer.add(panelGfx as any);
 
-    // Header
+    // Header label (scroll style)
+    const hdrGfx = this.add.graphics().setDepth(10);
+    hdrGfx.fillStyle(0xede8cf, 1);
+    hdrGfx.fillRect(cx - 70, 203, 140, 24);
+    hdrGfx.lineStyle(2, 0xc07830, 1);
+    hdrGfx.strokeRect(cx - 70, 203, 140, 24);
+    this.mainContainer.add(hdrGfx as any);
+
     const headerTitle = this.add.text(cx, 215, 'OPEN ROOMS', {
-      fontSize: '16px', color: '#f59e0b', letterSpacing: 5,
-    }).setOrigin(0.5).setDepth(10);
+      fontSize: '12px', fontStyle: 'bold', color: '#2a1a08', letterSpacing: 3,
+    }).setOrigin(0.5).setDepth(11);
 
     // Column headers
-    const colY = 248;
+    const colY = 242;
     const colHeaders = [
-      this.add.text(cx - 390, colY, 'CODE', { fontSize: '13px', color: '#475569', letterSpacing: 3 }).setDepth(10),
-      this.add.text(cx - 200, colY, 'HOST', { fontSize: '13px', color: '#475569', letterSpacing: 3 }).setDepth(10),
-      this.add.text(cx + 110, colY, 'PLAYERS', { fontSize: '13px', color: '#475569', letterSpacing: 3 }).setDepth(10),
+      this.add.text(cx - 390, colY, 'CODE', { fontSize: '12px', fontStyle: 'bold', color: '#ede8cf', letterSpacing: 3 }).setDepth(10),
+      this.add.text(cx - 200, colY, 'HOST', { fontSize: '12px', fontStyle: 'bold', color: '#ede8cf', letterSpacing: 3 }).setDepth(10),
+      this.add.text(cx + 110, colY, 'PLAYERS', { fontSize: '12px', fontStyle: 'bold', color: '#ede8cf', letterSpacing: 3 }).setDepth(10),
     ];
 
     const divGfx = this.add.graphics().setDepth(9);
-    divGfx.lineStyle(1, 0x334155, 0.8);
-    divGfx.lineBetween(cx - 450, 265, cx + 450, 265);
+    divGfx.lineStyle(2, 0x4a6090, 1);
+    divGfx.lineBetween(cx - 450, 258, cx + 450, 258);
     this.mainContainer.add([divGfx as any, headerTitle as any, ...colHeaders as any[]]);
 
     // Refresh indicator (spinning dots)
@@ -519,80 +622,74 @@ export class LobbyScene extends Phaser.Scene {
       }
 
       const cx = GAME_WIDTH / 2;
-      const rowH = 58;
-      const firstRowY = 290;
+      const rowH = 56;
+      const firstRowY = 268;
       const maxRows = 5;
 
       open.slice(0, maxRows).forEach((entry, i) => {
         const rowY = firstRowY + i * rowH;
         const isEven = i % 2 === 0;
 
-        // Row highlight
+        // Row — pixel alternating rows
         const rowBg = this.add.graphics().setDepth(9);
-        rowBg.fillStyle(isEven ? 0x1e3a5f : 0x172a47, 0.5);
-        rowBg.fillRoundedRect(cx - 450, rowY - 20, 900, rowH - 4, 6);
+        rowBg.fillStyle(isEven ? 0x3a5898 : 0x345090, 1);
+        rowBg.fillRect(cx - 448, rowY - 2, 896, rowH - 4);
+        rowBg.lineStyle(1, 0x4a6ab0, 0.4);
+        rowBg.strokeRect(cx - 448, rowY - 2, 896, rowH - 4);
         this.roomBrowserRows.push(rowBg);
 
         // Room code
         const codeStr = entry.roomCode || 'PUBLIC';
-        const codeCol = entry.roomCode ? 0x60a5fa : 0x8b5cf6;
-        const codeT = this.add.text(cx - 390, rowY, codeStr, {
-          fontSize: '20px', fontStyle: 'bold',
-          color: '#' + codeCol.toString(16).padStart(6, '0'),
+        const codeT = this.add.text(cx - 390, rowY + rowH / 2 - 6, codeStr, {
+          fontSize: '18px', fontStyle: 'bold', color: '#f0c060',
         }).setOrigin(0, 0.5).setDepth(10);
         this.roomBrowserRows.push(codeT);
 
-        // Host / display name from metadata
+        // Host name
         const hostName: string = (entry.metadata as any)?.hostName ?? 'Unknown';
-        const hostT = this.add.text(cx - 200, rowY, hostName, {
-          fontSize: '18px', color: '#cbd5e1',
+        const hostT = this.add.text(cx - 200, rowY + rowH / 2 - 6, hostName, {
+          fontSize: '16px', color: '#ede8cf',
         }).setOrigin(0, 0.5).setDepth(10);
         this.roomBrowserRows.push(hostT);
 
-        // Player count bubbles
+        // Player count squares (pixel style)
         for (let p = 0; p < entry.maxClients; p++) {
           const filled = p < entry.clients;
           const dotGfx = this.add.graphics().setDepth(10);
-          dotGfx.fillStyle(filled ? PLAYER_COLORS[p % 4] : 0x334155, filled ? 0.9 : 0.5);
-          dotGfx.fillCircle(cx + 120 + p * 28, rowY, 9);
+          dotGfx.fillStyle(filled ? PLAYER_COLORS[p % 4] : 0x2a3a60, 1);
+          dotGfx.fillRect(cx + 110 + p * 22, rowY + rowH / 2 - 12, 16, 16);
+          dotGfx.lineStyle(1, filled ? 0xffffff : 0x4a6090, 0.4);
+          dotGfx.strokeRect(cx + 110 + p * 22, rowY + rowH / 2 - 12, 16, 16);
           this.roomBrowserRows.push(dotGfx);
         }
 
-        const countT = this.add.text(cx + 240, rowY, `${entry.clients}/${entry.maxClients}`, {
-          fontSize: '16px', color: '#64748b',
+        const countT = this.add.text(cx + 230, rowY + rowH / 2 - 6, `${entry.clients}/${entry.maxClients}`, {
+          fontSize: '14px', color: '#8090b8',
         }).setOrigin(0, 0.5).setDepth(10);
         this.roomBrowserRows.push(countT);
 
-        // JOIN button
-        const btnW = 100, btnH = 36;
+        // JOIN button — pixel style
+        const btnW = 90, btnH = 32;
         const btnGfx = this.add.graphics().setDepth(10);
-        btnGfx.fillStyle(0x22c55e, 0.25);
-        btnGfx.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 8);
-        btnGfx.lineStyle(2, 0x22c55e, 0.8);
-        btnGfx.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 8);
+        const drawJoinBtn = (hover: boolean) => {
+          btnGfx.clear();
+          btnGfx.fillStyle(0x7a4e18, 1);
+          btnGfx.fillRect(-btnW / 2 + 2, -btnH / 2 + 2, btnW, btnH);
+          btnGfx.fillStyle(hover ? 0xf0e0a0 : 0xede8cf, 1);
+          btnGfx.fillRect(-btnW / 2, -btnH / 2, btnW, btnH);
+          btnGfx.lineStyle(2, 0xc07830, 1);
+          btnGfx.strokeRect(-btnW / 2, -btnH / 2, btnW, btnH);
+        };
+        drawJoinBtn(false);
         const btnT = this.add.text(0, 0, 'JOIN', {
-          fontSize: '16px', fontStyle: 'bold', color: '#ffffff',
+          fontSize: '15px', fontStyle: 'bold', color: '#2a1a08',
         }).setOrigin(0.5);
-        const btnCont = this.add.container(cx + 400, rowY, [btnGfx, btnT])
+        const btnCont = this.add.container(cx + 390, rowY + rowH / 2 - 6, [btnGfx, btnT])
           .setDepth(10)
           .setInteractive(new Phaser.Geom.Rectangle(-btnW / 2, -btnH / 2, btnW, btnH), Phaser.Geom.Rectangle.Contains);
 
-        btnCont.on('pointerover', () => {
-          btnGfx.clear();
-          btnGfx.fillStyle(0x22c55e, 0.6);
-          btnGfx.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 8);
-          btnGfx.lineStyle(2, 0x22c55e, 1);
-          btnGfx.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 8);
-          this.tweens.add({ targets: btnCont, scaleX: 1.08, scaleY: 1.08, duration: 80 });
-        });
-        btnCont.on('pointerout', () => {
-          btnGfx.clear();
-          btnGfx.fillStyle(0x22c55e, 0.25);
-          btnGfx.fillRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 8);
-          btnGfx.lineStyle(2, 0x22c55e, 0.8);
-          btnGfx.strokeRoundedRect(-btnW / 2, -btnH / 2, btnW, btnH, 8);
-          this.tweens.add({ targets: btnCont, scaleX: 1, scaleY: 1, duration: 80 });
-        });
+        btnCont.on('pointerover', () => { drawJoinBtn(true); btnT.setColor('#4060c8'); });
+        btnCont.on('pointerout', () => { drawJoinBtn(false); btnT.setColor('#2a1a08'); });
         btnCont.on('pointerdown', () => this.joinRoomById(entry.roomId, entry.roomCode));
 
         this.roomBrowserRows.push(btnCont);
@@ -639,24 +736,62 @@ export class LobbyScene extends Phaser.Scene {
   private showLobbyWaiting(): void {
     this.clearMain();
 
-    // Room code display
     const cx = GAME_WIDTH / 2;
-    const codeLabel = this.add.text(cx, 230, 'ROOM CODE', {
-      fontSize: '14px', color: '#64748b', letterSpacing: 4,
-    }).setOrigin(0.5).setDepth(10);
 
-    const codeBg = this.add.graphics().setDepth(10);
-    codeBg.fillStyle(0x1e3a5f, 0.8);
-    codeBg.fillRoundedRect(cx - 120, 248, 240, 50, 8);
+    // Pixel-art panel background
+    const panelGfx = this.add.graphics().setDepth(8);
+    // Shadow
+    panelGfx.fillStyle(0x0a1020, 0.7);
+    panelGfx.fillRect(cx - 258, 222, 520, 420);
+    // Blue panel body
+    panelGfx.fillStyle(0x2e4a8a, 1);
+    panelGfx.fillRect(cx - 260, 220, 520, 420);
+    // Inner lighter face
+    panelGfx.fillStyle(0x3d5fa0, 1);
+    panelGfx.fillRect(cx - 256, 224, 512, 412);
+    // Border
+    panelGfx.lineStyle(3, 0x6080c8, 1);
+    panelGfx.strokeRect(cx - 260, 220, 520, 420);
+    // Top-left highlight
+    panelGfx.fillStyle(0x6080c8, 0.4);
+    panelGfx.fillRect(cx - 256, 224, 512, 2);
+    panelGfx.fillRect(cx - 256, 224, 2, 412);
+    this.mainContainer.add(panelGfx as any);
 
-    const codeText = this.add.text(cx, 273, this.currentRoomCode, {
-      fontSize: '28px', fontStyle: 'bold', color: '#60a5fa', letterSpacing: 8,
+    // Room code section — pixel scroll label
+    const codeLabelGfx = this.add.graphics().setDepth(10);
+    codeLabelGfx.fillStyle(0xede8cf, 1);
+    codeLabelGfx.fillRect(cx - 80, 235, 160, 26);
+    codeLabelGfx.lineStyle(2, 0xc07830, 1);
+    codeLabelGfx.strokeRect(cx - 80, 235, 160, 26);
+    this.mainContainer.add(codeLabelGfx as any);
+
+    const codeLabel = this.add.text(cx, 248, 'ROOM CODE', {
+      fontSize: '12px', fontStyle: 'bold', color: '#2a1a08', letterSpacing: 3,
     }).setOrigin(0.5).setDepth(11);
 
-    // Players waiting title
-    const waitLabel = this.add.text(cx, 325, 'PLAYERS', {
-      fontSize: '14px', color: '#64748b', letterSpacing: 4,
-    }).setOrigin(0.5).setDepth(10);
+    // Code value box
+    const codeBg = this.add.graphics().setDepth(10);
+    codeBg.fillStyle(0x1a2744, 1);
+    codeBg.fillRect(cx - 110, 266, 220, 46);
+    codeBg.lineStyle(2, 0xc07830, 1);
+    codeBg.strokeRect(cx - 110, 266, 220, 46);
+
+    const codeText = this.add.text(cx, 289, this.currentRoomCode, {
+      fontSize: '26px', fontStyle: 'bold', color: '#f0c060', letterSpacing: 10,
+    }).setOrigin(0.5).setDepth(11);
+
+    // Players section label
+    const waitLabelGfx = this.add.graphics().setDepth(10);
+    waitLabelGfx.fillStyle(0xede8cf, 1);
+    waitLabelGfx.fillRect(cx - 60, 322, 120, 22);
+    waitLabelGfx.lineStyle(2, 0xc07830, 1);
+    waitLabelGfx.strokeRect(cx - 60, 322, 120, 22);
+    this.mainContainer.add(waitLabelGfx as any);
+
+    const waitLabel = this.add.text(cx, 333, 'PLAYERS', {
+      fontSize: '11px', fontStyle: 'bold', color: '#2a1a08', letterSpacing: 3,
+    }).setOrigin(0.5).setDepth(11);
 
     this.mainContainer.add([codeLabel as any, codeBg as any, codeText as any, waitLabel as any]);
 
@@ -723,46 +858,70 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   private refreshPlayerList(): void {
-    // Remove existing player texts
     this.playerListTexts.forEach(t => t.destroy());
     this.playerListTexts = [];
 
-    // Guard: state.players is undefined until the first onStateChange fires
     if (!this.room?.state?.players) return;
 
     const cx = GAME_WIDTH / 2;
+    const rowH = 42, startY = 352;
+
     let idx = 0;
     this.room.state.players.forEach((_p: any, sid: string) => {
       const pi = idx % 4;
       const color = PLAYER_COLORS[pi];
       const name = (_p.displayName as string | undefined) ?? 'Player ' + (idx + 1);
       const isMe = sid === this.room.sessionId;
+      const y = startY + idx * rowH;
 
-      const row = this.add.text(cx, 350 + idx * 42, `${PLAYER_NAMES[pi]}: ${name}${isMe ? ' (You)' : ''}`, {
-        fontSize: '20px',
-        color: '#' + color.toString(16).padStart(6, '0'),
-      }).setOrigin(0.5).setDepth(10);
+      // Row box — cream with player color tint
+      const rowGfx = this.add.graphics().setDepth(10);
+      rowGfx.fillStyle(0xede8cf, 1);
+      rowGfx.fillRect(cx - 200, y, 400, 34);
+      rowGfx.fillStyle(color, 0.18);
+      rowGfx.fillRect(cx - 200, y, 400, 34);
+      rowGfx.lineStyle(2, color, 0.7);
+      rowGfx.strokeRect(cx - 200, y, 400, 34);
+      // Color swatch on left
+      rowGfx.fillStyle(color, 1);
+      rowGfx.fillRect(cx - 196, y + 4, 10, 26);
 
-      this.playerListTexts.push(row);
+      const rowTxt = this.add.text(cx - 178, y + 17,
+        `${PLAYER_NAMES[pi]}: ${name}${isMe ? '  ◀ YOU' : ''}`, {
+        fontSize: '16px', fontStyle: 'bold',
+        color: '#2a1a08',
+      }).setOrigin(0, 0.5).setDepth(11);
+
+      this.playerListTexts.push(rowGfx as any, rowTxt);
       idx++;
     });
 
-    // Show NPC bot placeholders for unfilled slots
+    // NPC bot placeholders
     for (let npcSlot = idx; npcSlot < 4; npcSlot++) {
-      const npcColor = PLAYER_COLORS[npcSlot];
-      const npcRow = this.add.text(cx, 350 + npcSlot * 42, `${PLAYER_NAMES[npcSlot]}: 🤖 NPC Bot`, {
-        fontSize: '20px',
-        color: '#' + npcColor.toString(16).padStart(6, '0'),
-        alpha: 0.45,
-      } as any).setOrigin(0.5).setDepth(10).setAlpha(0.45);
-      this.playerListTexts.push(npcRow);
+      const color = PLAYER_COLORS[npcSlot];
+      const y = startY + npcSlot * rowH;
+
+      const rowGfx = this.add.graphics().setDepth(10);
+      rowGfx.fillStyle(0x1a2744, 0.5);
+      rowGfx.fillRect(cx - 200, y, 400, 34);
+      rowGfx.lineStyle(1, color, 0.25);
+      rowGfx.strokeRect(cx - 200, y, 400, 34);
+      rowGfx.fillStyle(color, 0.18);
+      rowGfx.fillRect(cx - 196, y + 4, 10, 26);
+
+      const rowTxt = this.add.text(cx - 178, y + 17,
+        `${PLAYER_NAMES[npcSlot]}: 🤖 NPC Bot`, {
+        fontSize: '15px', color: '#6070a0',
+      }).setOrigin(0, 0.5).setDepth(11);
+
+      this.playerListTexts.push(rowGfx as any, rowTxt);
     }
 
     if (idx < 4) {
-      const waiting = this.add.text(cx, 350 + 4 * 42 + 4, 'NPC bots will fill empty slots', {
-        fontSize: '14px', color: '#475569',
+      const hint = this.add.text(cx, startY + 4 * rowH + 6, 'Empty slots are filled by NPC bots', {
+        fontSize: '13px', color: '#5060a0',
       }).setOrigin(0.5).setDepth(10);
-      this.playerListTexts.push(waiting);
+      this.playerListTexts.push(hint);
     }
   }
 
