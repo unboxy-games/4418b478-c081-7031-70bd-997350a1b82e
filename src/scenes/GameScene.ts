@@ -123,8 +123,9 @@ export class GameScene extends Phaser.Scene {
 
     this.drawBackground();
     this.setupHUD();
-    this.setupDpad();
-    this.setupKeys();
+    this.setupBottomBar();
+    this.setupKeyboard();
+    this.setupSwipe();
     this.loadLevel(this.levelIdx);
 
     // On very first boot, check Unboxy saves for progress
@@ -190,59 +191,35 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(11);
   }
 
-  // ─── D-pad ──────────────────────────────────────────────────────────────────
+  // ─── Bottom bar (restart + hint) ────────────────────────────────────────────
 
-  private setupDpad(): void {
+  private setupBottomBar(): void {
     const cx = GAME_WIDTH / 2;
-    const cy = GAME_HEIGHT - 148;
-    const bs = 62, gap = 10;
-    const dirs = [
-      { dx: 0, dy: -(bs + gap), icon: '↑', dir: 'up' },
-      { dx: 0, dy: +(bs + gap), icon: '↓', dir: 'down' },
-      { dx: -(bs + gap), dy: 0, icon: '←', dir: 'left' },
-      { dx: +(bs + gap), dy: 0, icon: '→', dir: 'right' },
-    ] as const;
-
-    dirs.forEach(({ dx, dy, icon, dir }) => {
-      const bx = cx + dx, by = cy + dy;
-      const bg = this.add.graphics().setDepth(10);
-      this.drawDpadBtn(bg, bx, by, bs, false);
-
-      const lbl = this.add.text(bx, by, icon, {
-        fontSize: '28px', color: '#d8e890',
-      }).setOrigin(0.5).setDepth(11);
-
-      this.add.zone(bx, by, bs, bs).setDepth(12).setInteractive()
-        .on('pointerdown', () => {
-          this.tweens.add({ targets: [bg, lbl], scaleX: 0.88, scaleY: 0.88, duration: 70, yoyo: true });
-          this.slide(dir);
-        });
-    });
+    const btnY = GAME_HEIGHT - 76;
+    const s = 58;
 
     // Restart button
-    this.makeSideBtn(cx - 100, cy, '↺', () => this.restartLevel());
-  }
-
-  private drawDpadBtn(g: Phaser.GameObjects.Graphics, x: number, y: number, size: number, pressed: boolean): void {
-    g.clear();
-    g.fillStyle(0x1e3a0a, pressed ? 0.95 : 0.85);
-    g.fillRoundedRect(x - size / 2, y - size / 2, size, size, 13);
-    g.lineStyle(2, 0x5a9a3a, 0.9);
-    g.strokeRoundedRect(x - size / 2, y - size / 2, size, size, 13);
-  }
-
-  private makeSideBtn(x: number, y: number, icon: string, cb: () => void): void {
-    const s = 54;
     const bg = this.add.graphics().setDepth(10);
-    this.drawDpadBtn(bg, x, y, s, false);
-    this.add.text(x, y, icon, { fontSize: '26px', color: '#c8d880' }).setOrigin(0.5).setDepth(11);
-    this.add.zone(x, y, s, s).setDepth(12).setInteractive()
-      .on('pointerdown', () => { bg.setAlpha(0.5); this.time.delayedCall(120, () => { bg.setAlpha(1); cb(); }); });
+    bg.fillStyle(0x1e3a0a, 0.85);
+    bg.fillRoundedRect(cx - s / 2, btnY - s / 2, s, s, 13);
+    bg.lineStyle(2, 0x5a9a3a, 0.9);
+    bg.strokeRoundedRect(cx - s / 2, btnY - s / 2, s, s, 13);
+    this.add.text(cx, btnY, '↺', { fontSize: '26px', color: '#c8d880' }).setOrigin(0.5).setDepth(11);
+    this.add.zone(cx, btnY, s, s).setDepth(12).setInteractive()
+      .on('pointerdown', () => {
+        this.tweens.add({ targets: bg, alpha: 0.4, duration: 80, yoyo: true });
+        this.time.delayedCall(160, () => this.restartLevel());
+      });
+
+    // Hint text
+    this.add.text(cx, GAME_HEIGHT - 30, 'Tap tile • Swipe or ↑↓←→ to slide', {
+      fontSize: '16px', color: '#7aaa50', alpha: 0.75,
+    }).setOrigin(0.5).setDepth(10).setAlpha(0.65);
   }
 
-  // ─── Keyboard ───────────────────────────────────────────────────────────────
+  // ─── Keyboard (desktop) ──────────────────────────────────────────────────────
 
-  private setupKeys(): void {
+  private setupKeyboard(): void {
     this.input.keyboard?.on('keydown', (e: KeyboardEvent) => {
       const map: Record<string, 'up' | 'down' | 'left' | 'right'> = {
         ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
@@ -250,6 +227,37 @@ export class GameScene extends Phaser.Scene {
         W: 'up', S: 'down', A: 'left', D: 'right',
       };
       if (map[e.key]) this.slide(map[e.key]);
+    });
+  }
+
+  // ─── Swipe (touch / mouse drag) ──────────────────────────────────────────────
+
+  private setupSwipe(): void {
+    let startX = 0, startY = 0;
+
+    const onDown = (p: Phaser.Input.Pointer) => {
+      startX = p.x;
+      startY = p.y;
+    };
+
+    const onUp = (p: Phaser.Input.Pointer) => {
+      if (!this.selected || this.locked) return;
+      const dx = p.x - startX;
+      const dy = p.y - startY;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 40) return; // too small — treat as tap, not swipe
+      if (Math.abs(dx) > Math.abs(dy)) {
+        this.slide(dx > 0 ? 'right' : 'left');
+      } else {
+        this.slide(dy > 0 ? 'down' : 'up');
+      }
+    };
+
+    this.input.on('pointerdown', onDown);
+    this.input.on('pointerup', onUp);
+    this.events.once('shutdown', () => {
+      this.input.off('pointerdown', onDown);
+      this.input.off('pointerup', onUp);
     });
   }
 
@@ -269,10 +277,11 @@ export class GameScene extends Phaser.Scene {
     this.rows = level.rows;
     this.movesLeft = level.maxMoves;
 
-    // Compute tile size so grid fits between HUD (y~210) and D-pad (y~GAME_HEIGHT-220)
+    // Compute tile size — board sits between HUD (y≈210) and bottom bar (y≈GAME_HEIGHT-130)
     const PAD = 18, GAP = 6;
     const availW = GAME_WIDTH - 80;
-    const availH = GAME_HEIGHT - 430;
+    const topY = 210, botY = GAME_HEIGHT - 130;
+    const availH = botY - topY;
     const szW = Math.floor((availW - (this.cols - 1) * GAP - PAD * 2) / this.cols);
     const szH = Math.floor((availH - (this.rows - 1) * GAP - PAD * 2) / this.rows);
     this.tileSize = Math.min(130, szW, szH);
@@ -281,9 +290,8 @@ export class GameScene extends Phaser.Scene {
     const boardW = this.cols * this.tileSize + (this.cols - 1) * GAP + PAD * 2;
     const boardH = this.rows * this.tileSize + (this.rows - 1) * GAP + PAD * 2;
     this.boardX = (GAME_WIDTH - boardW) / 2 + PAD;
-    // Vertically center between y=210 and y=GAME_HEIGHT-220
-    const midY = 210 + availH / 2;
-    this.boardY = midY - boardH / 2 + PAD;
+    // Vertically center between topY and botY
+    this.boardY = topY + (availH - boardH) / 2 + PAD;
 
     // Board background
     const boardGfx = this.add.graphics().setDepth(1);
@@ -315,20 +323,6 @@ export class GameScene extends Phaser.Scene {
     // Selection ring graphics
     this.selGfx = this.add.graphics().setDepth(5);
     this.levelObjects.push(this.selGfx);
-
-    // Touch swipe detection
-    let swipeStart = { x: 0, y: 0 };
-    const onDown = (p: Phaser.Input.Pointer) => { swipeStart = { x: p.x, y: p.y }; };
-    const onUp = (p: Phaser.Input.Pointer) => {
-      if (!this.selected) return;
-      const dx = p.x - swipeStart.x, dy = p.y - swipeStart.y;
-      if (Math.hypot(dx, dy) < 28) return;
-      if (Math.abs(dx) > Math.abs(dy)) this.slide(dx > 0 ? 'right' : 'left');
-      else this.slide(dy > 0 ? 'down' : 'up');
-    };
-    this.input.on('pointerdown', onDown);
-    this.input.on('pointerup', onUp);
-    this.events.once('shutdown', () => { this.input.off('pointerdown', onDown); this.input.off('pointerup', onUp); });
 
     this.updateHUD();
   }

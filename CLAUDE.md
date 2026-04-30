@@ -21,10 +21,10 @@ Select a tile by tapping/clicking it, then swipe or press arrow keys / WASD to s
 - Smooth slide animation (180 ms Cubic ease)
 - Pop animation (scale-up + fade) + 9-dot particle burst + screen flash on match
 - Move counter with red-flash when ≤ 2 remaining
-- D-pad buttons (up/down/left/right) at bottom of screen
-- Arrow keys and WASD keyboard support
-- Touch swipe detection (drag on board)
-- Restart button (↺)
+- Arrow keys and WASD keyboard support (desktop)
+- Touch swipe gesture — tap tile to select, then swipe anywhere to slide (mobile)
+- Restart button (↺) at bottom center
+- Hint text: "Tap tile • Swipe or ↑↓←→ to slide"
 - Win / Lose result panel with animated entry
 - Level progression saved via `unboxy.saves` (key: `progress`)
 - Registry-based level index survives scene restarts within a session
@@ -50,4 +50,4 @@ Level progress stored in `registry` (session) and `unboxy.saves.set('progress', 
 On first boot, `checkSavedProgress()` async-loads saved level and restarts the scene if needed.
 
 ## Last change (this session)
-Built the full game from scratch: 10-level sliding tile puzzle with nature/earthy aesthetic, complete with tile graphics, animations, D-pad controls, swipe input, level progression, and save persistence.
+Replaced D-pad buttons with keyboard (arrow/WASD) for desktop and swipe gesture for touch screens. Board now uses more vertical space. Restart button remains at bottom center.
