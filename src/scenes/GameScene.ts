@@ -254,15 +254,17 @@ export class GameScene extends Phaser.Scene {
   // ─── Swipe (touch / mouse drag) ──────────────────────────────────────────────
 
   private setupSwipe(): void {
-    let startX = 0, startY = 0;
+    let startX = 0, startY = 0, swipeArmed = false;
 
     const onDown = (p: Phaser.Input.Pointer) => {
       startX = p.x;
       startY = p.y;
+      swipeArmed = true; // only honour a pointerup that had a matching pointerdown in THIS scene
     };
 
     const onUp = (p: Phaser.Input.Pointer) => {
-      if (this.locked) return;
+      if (this.locked || !swipeArmed) return;
+      swipeArmed = false;
       const dx = p.x - startX;
       const dy = p.y - startY;
       const dist = Math.hypot(dx, dy);

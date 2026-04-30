@@ -50,4 +50,4 @@ Level progress stored in `registry` (session) and `unboxy.saves.set('progress', 
 On first boot, `checkSavedProgress()` async-loads saved level and restarts the scene if needed.
 
 ## Last change (this session)
-Fixed ghost-input bug: tapping "Next Level" also triggered the first move of the new level because the pointerup event leaked into the new scene's swipe handler. Added a 350 ms startup lock in `create()` so residual pointer releases from the result panel are ignored.
+Fixed ghost-swipe bug more robustly: added `swipeArmed` flag so a pointerup is only treated as a swipe if a matching pointerdown was recorded in the current scene. Previously, if the user held through the scene restart and released after the 350 ms lock, `startX/startY` were still 0,0 giving a spurious large delta. The 350 ms startup lock is kept as an extra layer of defence.
