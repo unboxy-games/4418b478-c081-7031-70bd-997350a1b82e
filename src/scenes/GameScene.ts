@@ -179,7 +179,7 @@ export class GameScene extends Phaser.Scene {
   // ─── HUD ────────────────────────────────────────────────────────────────────
 
   private setupHUD(): void {
-    this.add.text(GAME_WIDTH / 2, 58, '碰碰消', {
+    this.add.text(GAME_WIDTH / 2, 58, 'Bump Popper', {
       fontSize: '52px', color: '#d8e890', fontStyle: 'bold',
       stroke: '#1e3a0a', strokeThickness: 5,
     }).setOrigin(0.5).setDepth(10);
@@ -286,7 +286,6 @@ export class GameScene extends Phaser.Scene {
     this.levelObjects = [];
     this.grid.forEach(row => row.forEach(t => { if (t) { t.idleTween?.stop(); t.container.destroy(); } }));
     this.grid = [];
-    this.selected = null;
     this.locked = false;
 
     const level = LEVELS[idx];
@@ -626,8 +625,8 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: panel, alpha: 1, duration: 300 });
 
     const titleTxt = won
-      ? (this.levelIdx < LEVELS.length - 1 ? '✨ 关卡通过！' : '🏆 全部通关！')
-      : '😔 再试一次';
+      ? (this.levelIdx < LEVELS.length - 1 ? '✨ Level Clear!' : '🏆 All Cleared!')
+      : '😔 Try Again';
     const title = this.add.text(GAME_WIDTH / 2, panelY + 68, titleTxt, {
       fontSize: '36px', color: won ? '#d8f060' : '#f09060', fontStyle: 'bold',
       stroke: '#0a1e04', strokeThickness: 4,
@@ -635,7 +634,7 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: title, alpha: 1, y: panelY + 62, duration: 420, ease: 'Back.easeOut' });
 
     const sub = this.add.text(GAME_WIDTH / 2, panelY + 120,
-      won ? `第 ${this.levelIdx + 1} / ${LEVELS.length} 关` : `剩余 ${this.movesLeft} 步时卡关`, {
+      won ? `Level ${this.levelIdx + 1} of ${LEVELS.length}` : 'No moves left!', {
         fontSize: '20px', color: '#b8d090',
       }).setOrigin(0.5).setDepth(202).setAlpha(0);
     this.tweens.add({ targets: sub, alpha: 1, duration: 320, delay: 120 });
@@ -651,8 +650,8 @@ export class GameScene extends Phaser.Scene {
     this.tweens.add({ targets: btnG, alpha: 1, duration: 320, delay: 180 });
 
     const btnLbl = won
-      ? (this.levelIdx < LEVELS.length - 1 ? '下一关 →' : '重新开始')
-      : '重试 ↺';
+      ? (this.levelIdx < LEVELS.length - 1 ? 'Next Level →' : 'Play Again')
+      : 'Retry ↺';
     const btnTxt = this.add.text(GAME_WIDTH / 2, btnY, btnLbl, {
       fontSize: '24px', color: '#ffffff', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(203).setAlpha(0);
@@ -675,7 +674,7 @@ export class GameScene extends Phaser.Scene {
 
   private updateHUD(): void {
     this.levelText.setText(`Level ${this.levelIdx + 1} / ${LEVELS.length}`);
-    this.movesText.setText(`还剩 ${this.movesLeft} 步可走`);
+    this.movesText.setText(`${this.movesLeft} move${this.movesLeft !== 1 ? 's' : ''} left`);
     if (this.movesLeft <= 2) {
       this.tweens.add({ targets: this.movesText, scaleX: 1.18, scaleY: 1.18, duration: 90, yoyo: true });
     }

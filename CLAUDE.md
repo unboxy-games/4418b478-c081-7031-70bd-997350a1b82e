@@ -50,4 +50,4 @@ Level progress stored in `registry` (session) and `unboxy.saves.set('progress', 
 On first boot, `checkSavedProgress()` async-loads saved level and restarts the scene if needed.
 
 ## Last change (this session)
-Changed core mechanic: every key press / swipe now slides ALL tiles simultaneously (like 2048-style). Removed tile selection entirely. computeAllSlides() processes tiles from the direction-wall side first so cascade eliminations work (e.g. a tile can pass through space freed by an earlier eliminated pair).
+Translated all text to English: moves HUD shows "X move(s) left"; result panel shows "✨ Level Clear!" / "🏆 All Cleared!" / "😔 Try Again"; subtitle shows "Level X of Y" or "No moves left!"; buttons read "Next Level →", "Play Again", "Retry ↺". Also removed a stale `this.selected = null` reference left over from the old single-tile mechanic.
