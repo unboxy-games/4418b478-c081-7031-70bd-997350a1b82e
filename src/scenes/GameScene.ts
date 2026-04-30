@@ -30,194 +30,175 @@ const NUM_COLORS = COLORS.length;
 const MIN_GROUP = 2;
 
 // ─── Level definitions ───────────────────────────────────────────────────────
-// Each level: 9 rows × 7 cols.  G=0 Y=1 B=2 O=3  .=empty
-// Row 0 = top of grid, row 8 = bottom.
-// All tiles must belong to connected same-colour groups of ≥2 at start.
-function parseGrid(rows: string[]): number[][] {
-  const map: Record<string, number> = { G: 0, Y: 1, B: 2, O: 3 };
-  const grid: number[][] = Array.from({ length: COLS }, () => Array(ROWS).fill(-1));
-  for (let r = 0; r < ROWS; r++) {
-    const row = rows[r] ?? '';
-    for (let c = 0; c < COLS; c++) {
-      const ch = row[c] ?? '.';
-      grid[c][r] = map[ch] ?? -1;
-    }
-  }
-  return grid;
-}
-
+// cols[c] = array of colorIds from BOTTOM tile (row ROWS-1) upward.
+// 0=green  1=yellow  2=blue  3=orange
 interface LevelDef {
   maxPops: number;
-  grid: number[][];
+  cols: number[][]; // cols[c][0] = bottom tile of column c
 }
 
 const LEVELS: LevelDef[] = [
-  // ── L1 · Tutorial · 3 cols of 2 rows · 14 tiles ───────────────────────────
-  // Three obvious colour blocks. Pop each once. Perfect warmup.
+  // ── L1 · Tutorial · G split into 2 disconnected groups ────────────────────
+  // G-A: cols 0-1 (rows 7-8) │ Y: cols 2-3 │ B: col 4 │ G-B: cols 5-6 (rows 7-8)
+  // G-A and G-B are separated by Y+B wall — player must tap G twice.
+  // 4 groups · 16 tiles · needs 4 pops → maxPops: 6 (2 spare for tutorial)
+  {
+    maxPops: 6,
+    cols: [
+      [0, 0],         // col 0: G-A (rows 7-8)
+      [0, 0],         // col 1: G-A (rows 7-8, joined with col 0)
+      [1, 1, 1],      // col 2: Y   (rows 6-8)
+      [1, 1, 1],      // col 3: Y   (rows 6-8, joined with col 2)
+      [2, 2],         // col 4: B   (rows 7-8)
+      [0, 0],         // col 5: G-B (rows 7-8, disconnected from G-A)
+      [0, 0],         // col 6: G-B (rows 7-8, joined with col 5)
+    ],
+  },
+
+  // ── L2 · 4 colours · Y split ──────────────────────────────────────────────
+  // G, B each one group; Y has 2 separate groups; O one group.
+  // 5 groups · 18 tiles · maxPops: 7
+  {
+    maxPops: 7,
+    cols: [
+      [0, 0, 0],      // col 0: G (rows 6-8)
+      [0, 0, 0],      // col 1: G (rows 6-8, joined)
+      [1, 1, 1, 1],   // col 2: Y-A (rows 5-8)
+      [2, 2],         // col 3: B (rows 7-8)
+      [2, 2],         // col 4: B (rows 7-8, joined)
+      [3, 3, 3],      // col 5: O (rows 6-8)
+      [1, 1],         // col 6: Y-B (rows 7-8, disconnected: B+O wall between cols 2 and 6)
+    ],
+  },
+
+  // ── L3 · Gravity merge · B bridge splits G into two halves ────────────────
+  // Each of cols 0-1: G(r8-7) · B(r6) · G(r5-4)
+  // Brute force: 5 pops (G-lower, B, G-upper, Y, O)
+  // With trick:  pop B first → G falls, merges to 8-tile group → only 4 pops
+  // maxPops: 5 — brute force barely works, trick gives breathing room
   {
     maxPops: 5,
-    grid: parseGrid([
-      '.......',
-      '.......',
-      '.......',
-      '.......',
-      '.......',
-      '.......',
-      '.......',
-      'GGGYYBB',
-      'GGGYYBB',
-    ]),
+    cols: [
+      [0, 0, 2, 0, 0], // col 0: G(r8-7)+B(r6)+G(r5-4)
+      [0, 0, 2, 0, 0], // col 1: same — B group = 2 tiles (cols 0+1 at r6)
+      [1, 1, 1],        // col 2: Y (rows 6-8)
+      [1, 1, 1],        // col 3: Y (rows 6-8, joined)
+      [3, 3, 3],        // col 4: O (rows 6-8)
+      [3, 3],           // col 5: O (rows 7-8, joined with col 4)
+      [],               // col 6: empty
+    ],
   },
 
-  // ── L2 · 4 colours · 4 groups · 16 tiles ──────────────────────────────────
-  // G(left col), O(centre), Y(centre-right), B(right). Small O+Y groups.
-  {
-    maxPops: 7,
-    grid: parseGrid([
-      '.......',
-      '.......',
-      '.......',
-      '.......',
-      '.......',
-      '.......',
-      'GG..O..',
-      'GGYOOBB',
-      'GGYYOBB',
-    ]),
-  },
-
-  // ── L3 · Gravity intro · 5 groups (or 4 with trick) · 18 tiles ────────────
-  // G top (rows 3-4) and G bottom (row 8) share cols 2-3.
-  // Y bridge at rows 5-6 separates them.
-  // Pop Y first → G falls and merges → 4 pops; brute force = 5 pops.
-  {
-    maxPops: 7,
-    grid: parseGrid([
-      '.......',
-      '.......',
-      '.......',
-      '..GG...',
-      '..GG...',
-      '..YY...',
-      'BBYYOO.',
-      'BB..OO.',
-      '..GG...',
-    ]),
-  },
-
-  // ── L4 · 4 colours · 4 groups · 22 tiles ──────────────────────────────────
-  // Bigger groups; need to decide order (pop O/Y to avoid trapping tiles).
-  {
-    maxPops: 8,
-    grid: parseGrid([
-      '.......',
-      '.......',
-      '.GG....',
-      '.GGYY..',
-      'BBGGYY.',
-      'BBOOYY.',
-      'BBOO...',
-      '.......',
-      '.......',
-    ]),
-  },
-
-  // ── L5 · 5 groups · 24 tiles ──────────────────────────────────────────────
-  // Two separate B groups (left & right). Pop order matters.
-  {
-    maxPops: 9,
-    grid: parseGrid([
-      '.......',
-      '.......',
-      '.GG....',
-      '.GGYY..',
-      'BBGGYY.',
-      'BBOOYY.',
-      'BBOOGG.',
-      '...OOGG',
-      '...OOBB',
-    ]),
-  },
-
-  // ── L6 · 5 groups · 26 tiles · deeper gravity ─────────────────────────────
-  // O "cap" sits on top of G column; popping O lets G grow downward.
+  // ── L4 · All 4 colours, each split into 2 disconnected groups ─────────────
+  // G-A/G-B, Y-A/Y-B, B-A/B-B, O-A/O-B — strategic ordering required
+  // 8 groups · 22 tiles · maxPops: 10
   {
     maxPops: 10,
-    grid: parseGrid([
-      '.......',
-      '.......',
-      '...OO..',
-      '..GOOY.',
-      'BBGOOY.',
-      'BBGGOY.',
-      'BBGGYY.',
-      '.BGGBB.',
-      '..GG...',
-    ]),
+    cols: [
+      [0, 0, 0],      // col 0: G-A (rows 6-8)
+      [0, 0, 0],      // col 1: G-A (rows 6-8, joined)
+      [1, 1, 1, 1],   // col 2: Y-A (rows 5-8)
+      [2, 2, 2],      // col 3: B-A (rows 6-8)
+      [3, 3, 3],      // col 4: O-A (rows 6-8)
+      [1, 1, 2, 2],   // col 5: Y-B(r8-7=2) + B-B(r6-5=2) — both disconnected from their A-groups
+      [3, 3],         // col 6: O-B (rows 7-8, disconnected from O-A by col 5 mixed)
+    ],
   },
 
-  // ── L7 · 6 groups · 26 tiles ──────────────────────────────────────────────
+  // ── L5 · 7 groups · bigger layout ─────────────────────────────────────────
+  // G, Y, B each have 2 groups; O has 1 large group — 24 tiles · maxPops: 9
+  {
+    maxPops: 9,
+    cols: [
+      [0, 0, 0, 0],    // col 0: G-A (rows 5-8)
+      [1, 1, 1, 1],    // col 1: Y-A (rows 5-8)
+      [2, 2, 2, 2],    // col 2: B-A (rows 5-8)
+      [3, 3, 3, 3],    // col 3: O (rows 5-8, one big group)
+      [0, 0, 0],       // col 4: G-B (rows 6-8, disconnected: Y+B+O wall between col 0 and col 4)
+      [1, 1, 2, 2, 2], // col 5: Y-B(r8-7=2) + B-B(r6-4=3)
+      [],              // col 6: empty
+    ],
+  },
+
+  // ── L6 · 8 groups · all colours double-split · order matters ──────────────
+  // Each colour appears exactly twice, in non-adjacent regions — 24 tiles · maxPops: 10
+  {
+    maxPops: 10,
+    cols: [
+      [0, 0, 0, 0],   // col 0: G-A (rows 5-8)
+      [1, 1, 1, 1],   // col 1: Y-A (rows 5-8)
+      [2, 2, 2, 2],   // col 2: B-A (rows 5-8)
+      [3, 3, 3, 3],   // col 3: O-A (rows 5-8)
+      [0, 0, 1, 1],   // col 4: G-B(r8-7) + Y-B(r6-5)
+      [2, 2, 3, 3],   // col 5: B-B(r8-7) + O-B(r6-5)
+      [],             // col 6: empty
+    ],
+  },
+
+  // ── L7 · Two gravity merges — must use both tricks ────────────────────────
+  // Cols 0-1: G-lower(r8-7) · O-bridge(r6) · G-upper(r5-4)
+  // Cols 2-3: Y-lower(r8-7) · B-bridge(r6) · Y-upper(r5-4)
+  // Brute force: 6 pops (fail!) — need at least one merge trick
+  // Both tricks: pop O(2)→G merges, pop B(2)→Y merges, pop G(8)+Y(8) = 4 pops ✓
+  // maxPops: 5 — must use ≥1 trick
+  {
+    maxPops: 5,
+    cols: [
+      [0, 0, 3, 0, 0], // col 0: G-lower(r8-7)+O-bridge(r6)+G-upper(r5-4)
+      [0, 0, 3, 0, 0], // col 1: same — O-bridge = 2 tiles (cols 0+1 at r6)
+      [1, 1, 2, 1, 1], // col 2: Y-lower(r8-7)+B-bridge(r6)+Y-upper(r5-4)
+      [1, 1, 2, 1, 1], // col 3: same — B-bridge = 2 tiles (cols 2+3 at r6)
+      [],              // col 4: empty
+      [],              // col 5: empty
+      [],              // col 6: empty
+    ],
+  },
+
+  // ── L8 · Dense layout · 8 groups · 28 tiles ───────────────────────────────
+  // Taller columns, tighter move limit — maxPops: 11
   {
     maxPops: 11,
-    grid: parseGrid([
-      '.......',
-      '.......',
-      '..OO...',
-      'GGOOBB.',
-      'GGOOBB.',
-      'GGOOBY.',
-      'GGYYYY.',
-      '.GYYYY.',
-      '.GYYY..',
-    ]),
+    cols: [
+      [0, 0, 0, 0, 0], // col 0: G-A (5)
+      [1, 1, 1, 1],    // col 1: Y-A (4)
+      [2, 2, 2, 2],    // col 2: B-A (4)
+      [3, 3, 3, 3, 3], // col 3: O-A (5)
+      [0, 0, 1, 1],    // col 4: G-B(r8-7) + Y-B(r6-5)
+      [2, 2, 3, 3],    // col 5: B-B(r8-7) + O-B(r6-5)
+      [0, 0],          // col 6: G-C (rows 7-8, 3rd G group adds extra challenge)
+    ],
   },
 
-  // ── L8 · 6 groups · 28 tiles ──────────────────────────────────────────────
-  {
-    maxPops: 11,
-    grid: parseGrid([
-      '.......',
-      '..OO...',
-      '.OOGG..',
-      'BOOGGB.',
-      'BBOGGYY',
-      'BBGGYY.',
-      'BBGG...',
-      '..GGOO.',
-      '...GOO.',
-    ]),
-  },
-
-  // ── L9 · 7 groups · 30 tiles ──────────────────────────────────────────────
+  // ── L9 · Gravity merge + 4-colour split · 28 tiles ────────────────────────
+  // Cols 0-1: G-lower/B-bridge/G-upper — like L3 but upper half is 3 tiles taller.
+  // Y and O each split into 2 groups; B-bridge counted separately — maxPops: 12
   {
     maxPops: 12,
-    grid: parseGrid([
-      '.......',
-      '.OOGG..',
-      'BOOGGB.',
-      'BBOGGYY',
-      'BBOGYYO',
-      'BBGYYOO',
-      'GBGYYO.',
-      'GGBYY..',
-      'GGB....',
-    ]),
+    cols: [
+      [0, 0, 2, 0, 0, 0], // col 0: G-lower(r8-7)+B-bridge(r6)+G-upper(r5-3)
+      [0, 0, 2, 0, 0, 0], // col 1: same — B-bridge = 2 tiles (disconnected from col5 B-B)
+      [1, 1, 1, 1, 1],    // col 2: Y-A (5, rows4-8)
+      [3, 3, 3, 3],       // col 3: O-A (4, rows5-8)
+      [2, 2, 2],          // col 4: B-B (3, rows6-8 — B wall separates O-A from O-B)
+      [1, 1],             // col 5: Y-B (2, rows7-8 — disconnected from Y-A: O+B wall)
+      [3, 3],             // col 6: O-B (2, rows7-8 — disconnected from O-A: B+Y wall)
+    ],
   },
 
-  // ── L10 · Final · 7 groups · 32 tiles ─────────────────────────────────────
+  // ── L10 · Final challenge · all 4 colours triple-split · 32 tiles ─────────
+  // Every tap requires thought — pop order and gravity merge both matter
+  // maxPops: 13
   {
     maxPops: 13,
-    grid: parseGrid([
-      '.......',
-      '.OOYY..',
-      'OOYYYBB',
-      'GOOYBB.',
-      'GGOYBB.',
-      'GGOOBY.',
-      'BGGOBB.',
-      'BBGOOB.',
-      'BBGOO..',
-    ]),
+    cols: [
+      [0, 0, 0, 0, 0],    // col 0: G-A (5)
+      [1, 1, 1, 1, 1],    // col 1: Y-A (5)
+      [2, 2, 2, 2],       // col 2: B-A (4)
+      [3, 3, 3, 3],       // col 3: O-A (4)
+      [0, 0, 1, 1, 2, 2], // col 4: G-B(r8-7)+Y-B(r6-5)+B-B(r4-3)
+      [3, 3, 0, 0],       // col 5: O-B(r8-7)+G-C(r6-5)
+      [1, 1, 3, 3],       // col 6: Y-C(r8-7)+O-C(r6-5)
+    ],
   },
 ];
 
@@ -373,10 +354,13 @@ export class GameScene extends Phaser.Scene {
 
     const lvl = LEVELS[this.currentLevel];
     for (let col = 0; col < COLS; col++) {
-      for (let row = 0; row < ROWS; row++) {
-        const colorId = lvl.grid[col]?.[row] ?? -1;
-        if (colorId < 0) continue;
+      const stack = lvl.cols[col] ?? [];
+      // Place tiles starting from the bottom row (ROWS-1) upward — no floating
+      let row = ROWS - 1;
+      for (const colorId of stack) {
+        if (row < 0) break;
         this.grid[col][row] = { colorId, container: this.createTile(col, row, colorId) };
+        row--;
       }
     }
   }
