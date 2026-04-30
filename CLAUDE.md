@@ -50,4 +50,4 @@ Level progress stored in `registry` (session) and `unboxy.saves.set('progress', 
 On first boot, `checkSavedProgress()` async-loads saved level and restarts the scene if needed.
 
 ## Last change (this session)
-Translated all text to English: moves HUD shows "X move(s) left"; result panel shows "✨ Level Clear!" / "🏆 All Cleared!" / "😔 Try Again"; subtitle shows "Level X of Y" or "No moves left!"; buttons read "Next Level →", "Play Again", "Retry ↺". Also removed a stale `this.selected = null` reference left over from the old single-tile mechanic.
+Fixed ghost-input bug: tapping "Next Level" also triggered the first move of the new level because the pointerup event leaked into the new scene's swipe handler. Added a 350 ms startup lock in `create()` so residual pointer releases from the result panel are ignored.

@@ -133,7 +133,11 @@ export class GameScene extends Phaser.Scene {
     this.setupBottomBar();
     this.setupKeyboard();
     this.setupSwipe();
+    this.locked = true; // stay locked until the startup grace period expires
     this.loadLevel(this.levelIdx);
+    // Brief grace period so any residual pointerup from the previous scene
+    // (e.g. tapping "Next Level") doesn't trigger an accidental first move.
+    this.time.delayedCall(350, () => { this.locked = false; });
 
     // On very first boot, check Unboxy saves for progress
     if (!this.registry.has('currentLevel')) {
@@ -286,7 +290,6 @@ export class GameScene extends Phaser.Scene {
     this.levelObjects = [];
     this.grid.forEach(row => row.forEach(t => { if (t) { t.idleTween?.stop(); t.container.destroy(); } }));
     this.grid = [];
-    this.locked = false;
 
     const level = LEVELS[idx];
     this.cols = level.cols;
