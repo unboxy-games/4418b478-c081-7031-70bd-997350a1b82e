@@ -5,7 +5,7 @@
 **Style:** Nature / earthy (dark forest green background, sandy board, clay tiles)
 
 ## Core mechanic
-Select a tile by tapping/clicking it, then swipe or press arrow keys / WASD to slide it. The tile glides across the board until it hits a wall or another tile. If it collides with a same-colored tile, **both are eliminated**. Clear all tiles within the move limit to win.
+Press an arrow key or swipe in a direction — **all tiles on the board slide simultaneously** in that direction. Each tile glides until it hits a wall or another tile. If two same-colored tiles collide, both are eliminated. Clear all tiles within the move limit to win.
 
 ## Features implemented
 - 10 hand-crafted puzzle levels (4×4 → 5×5 → 5×6 → 6×6 grids)
@@ -21,10 +21,10 @@ Select a tile by tapping/clicking it, then swipe or press arrow keys / WASD to s
 - Smooth slide animation (180 ms Cubic ease)
 - Pop animation (scale-up + fade) + 9-dot particle burst + screen flash on match
 - Move counter with red-flash when ≤ 2 remaining
-- Arrow keys and WASD keyboard support (desktop)
-- Touch swipe gesture — tap tile to select, then swipe anywhere to slide (mobile)
+- Arrow keys and WASD keyboard support (desktop, via window.addEventListener)
+- Touch swipe gesture — swipe anywhere to slide all tiles (mobile)
 - Restart button (↺) at bottom center
-- Hint text: "Tap tile • Swipe or ↑↓←→ to slide"
+- Hint text: "Swipe or press ↑↓←→ to move all tiles"
 - Win / Lose result panel with animated entry
 - Level progression saved via `unboxy.saves` (key: `progress`)
 - Registry-based level index survives scene restarts within a session
@@ -50,4 +50,4 @@ Level progress stored in `registry` (session) and `unboxy.saves.set('progress', 
 On first boot, `checkSavedProgress()` async-loads saved level and restarts the scene if needed.
 
 ## Last change (this session)
-Fixed keyboard input: switched from Phaser keyboard plugin (unreliable in iframes) to window.addEventListener('keydown') which fires regardless of canvas focus. Arrow keys and WASD now reliably slide selected tiles.
+Changed core mechanic: every key press / swipe now slides ALL tiles simultaneously (like 2048-style). Removed tile selection entirely. computeAllSlides() processes tiles from the direction-wall side first so cascade eliminations work (e.g. a tile can pass through space freed by an earlier eliminated pair).

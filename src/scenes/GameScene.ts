@@ -17,6 +17,15 @@ interface TileData {
   idleTween?: Phaser.Tweens.Tween;
 }
 
+// Describes one tile's movement in a single slide action
+interface TileMove {
+  tile: TileData;
+  toCol: number;
+  toRow: number;
+  eliminated: boolean;
+  partner?: TileData; // the same-color tile it collides with
+}
+
 interface Level {
   cols: number; rows: number; maxMoves: number;
   tiles: { col: number; row: number; color: TColor }[];
@@ -98,7 +107,6 @@ const LEVELS: Level[] = [
 
 export class GameScene extends Phaser.Scene {
   private grid: (TileData | null)[][] = [];
-  private selected: TileData | null = null;
   private movesLeft = 0;
   private levelIdx = 0;
   private locked = false;
@@ -110,7 +118,6 @@ export class GameScene extends Phaser.Scene {
   private rows = 0;
   private movesText!: Phaser.GameObjects.Text;
   private levelText!: Phaser.GameObjects.Text;
-  private selGfx!: Phaser.GameObjects.Graphics;
   private levelObjects: Phaser.GameObjects.GameObject[] = [];
 
   constructor() { super({ key: 'GameScene' }); }
@@ -212,7 +219,7 @@ export class GameScene extends Phaser.Scene {
       });
 
     // Hint text
-    this.add.text(cx, GAME_HEIGHT - 30, 'Tap tile • Swipe or ↑↓←→ to slide', {
+    this.add.text(cx, GAME_HEIGHT - 30, 'Swipe or press ↑↓←→ to move all tiles', {
       fontSize: '16px', color: '#7aaa50', alpha: 0.75,
     }).setOrigin(0.5).setDepth(10).setAlpha(0.65);
   }
@@ -251,7 +258,7 @@ export class GameScene extends Phaser.Scene {
     };
 
     const onUp = (p: Phaser.Input.Pointer) => {
-      if (!this.selected || this.locked) return;
+      if (this.locked) return;
       const dx = p.x - startX;
       const dy = p.y - startY;
       const dist = Math.hypot(dx, dy);
@@ -330,10 +337,6 @@ export class GameScene extends Phaser.Scene {
       this.grid[row][col] = tile;
     });
 
-    // Selection ring graphics
-    this.selGfx = this.add.graphics().setDepth(5);
-    this.levelObjects.push(this.selGfx);
-
     this.updateHUD();
   }
 
@@ -341,10 +344,7 @@ export class GameScene extends Phaser.Scene {
 
   private createTile(col: number, row: number, color: TColor): TileData {
     const s = this.tileSize;
-    const container = this.add.container(this.tileX(col), this.tileY(row))
-      .setDepth(3)
-      .setSize(s, s)
-      .setInteractive(new Phaser.Geom.Rectangle(0, 0, s, s), Phaser.Geom.Rectangle.Contains);
+    const container = this.add.container(this.tileX(col), this.tileY(row)).setDepth(3);
 
     const g = this.add.graphics();
     const p = PALETTE[color];
@@ -399,9 +399,6 @@ export class GameScene extends Phaser.Scene {
 
     container.add(g);
 
-    // Interact
-    container.on('pointerdown', () => this.onTileClick(tile));
-
     const tile: TileData = { col, row, color, container };
 
     // Gentle idle bob
@@ -417,134 +414,152 @@ export class GameScene extends Phaser.Scene {
     return tile;
   }
 
-  // ─── Selection ───────────────────────────────────────────────────────────────
-
-  private onTileClick(tile: TileData): void {
-    if (this.locked) return;
-    if (this.selected === tile) { this.deselectTile(); return; }
-    this.selectTile(tile);
-  }
-
-  private selectTile(tile: TileData): void {
-    if (this.selected) {
-      // Restore previous without full deselect to avoid tween flicker
-      this.tweens.add({ targets: this.selected.container, scaleX: 1, scaleY: 1, duration: 90 });
-    }
-    this.selected = tile;
-    tile.idleTween?.pause();
-    this.tweens.add({ targets: tile.container, scaleX: 1.09, scaleY: 1.09, duration: 130, ease: 'Back.easeOut' });
-    this.drawSelection();
-  }
-
-  private deselectTile(): void {
-    if (!this.selected) return;
-    const tile = this.selected;
-    this.selected = null;
-    this.selGfx.clear();
-    this.tweens.add({ targets: tile.container, scaleX: 1, scaleY: 1, duration: 100 });
-    tile.idleTween?.resume();
-  }
-
-  private drawSelection(): void {
-    if (!this.selected) return;
-    const { col, row } = this.selected;
-    const x = this.tileX(col), y = this.tileY(row), s = this.tileSize;
-    this.selGfx.clear();
-    this.selGfx.lineStyle(3.5, 0xffffff, 0.92);
-    this.selGfx.strokeRoundedRect(x - 4, y - 4, s + 8, s + 8, 14);
-    this.selGfx.lineStyle(2, 0xffff60, 0.45);
-    this.selGfx.strokeRoundedRect(x - 8, y - 8, s + 16, s + 16, 18);
-  }
-
-  // ─── Slide logic ─────────────────────────────────────────────────────────────
+  // ─── Slide logic — ALL tiles move simultaneously ──────────────────────────────
 
   private slide(dir: 'up' | 'down' | 'left' | 'right'): void {
-    if (!this.selected || this.locked) return;
-    const { col, row } = this.selected;
-    const { toCol, toRow, hitTile } = this.computeSlide(col, row, dir);
-    if (toCol === col && toRow === row && hitTile === null) return; // wall bump — no move
-
-    // Even if it hits a different-color tile immediately, don't consume a move
-    if (toCol === col && toRow === row && hitTile !== null && hitTile.color !== this.selected.color) return;
+    if (this.locked) return;
+    const moves = this.computeAllSlides(dir);
+    if (moves.length === 0) return; // nothing would move — don't spend a move
 
     this.locked = true;
     this.movesLeft--;
     this.updateHUD();
-    this.executeSlide(this.selected, toCol, toRow, hitTile);
+    this.executeAllSlides(moves);
   }
 
-  private computeSlide(col: number, row: number, dir: 'up' | 'down' | 'left' | 'right'): {
-    toCol: number; toRow: number; hitTile: TileData | null;
-  } {
+  // Compute where every tile ends up after a full-board slide.
+  // Uses a sequential simulation processed from the direction-wall side so that
+  // tiles further back can slide into the space left by eliminated pairs.
+  private computeAllSlides(dir: 'up' | 'down' | 'left' | 'right'): TileMove[] {
+    // Working copy of the grid — mutated during simulation
+    const tmp: (TileData | null)[][] = this.grid.map(r => [...r]);
+    const eliminated = new Set<TileData>();
+    const moves = new Map<TileData, TileMove>();
+
     const dc = dir === 'left' ? -1 : dir === 'right' ? 1 : 0;
     const dr = dir === 'up' ? -1 : dir === 'down' ? 1 : 0;
-    let c = col, r = row;
-    while (true) {
-      const nc = c + dc, nr = r + dr;
-      if (nc < 0 || nc >= this.cols || nr < 0 || nr >= this.rows) break;
-      const next = this.grid[nr][nc];
-      if (next !== null) return { toCol: c, toRow: r, hitTile: next };
-      c = nc; r = nr;
+
+    // Process tiles closest to the direction wall first so they "claim" space first
+    const ordered: TileData[] = [];
+    if (dir === 'right') {
+      for (let c = this.cols - 1; c >= 0; c--)
+        for (let r = 0; r < this.rows; r++)
+          if (tmp[r][c]) ordered.push(tmp[r][c]!);
+    } else if (dir === 'left') {
+      for (let c = 0; c < this.cols; c++)
+        for (let r = 0; r < this.rows; r++)
+          if (tmp[r][c]) ordered.push(tmp[r][c]!);
+    } else if (dir === 'down') {
+      for (let r = this.rows - 1; r >= 0; r--)
+        for (let c = 0; c < this.cols; c++)
+          if (tmp[r][c]) ordered.push(tmp[r][c]!);
+    } else {
+      for (let r = 0; r < this.rows; r++)
+        for (let c = 0; c < this.cols; c++)
+          if (tmp[r][c]) ordered.push(tmp[r][c]!);
     }
-    return { toCol: c, toRow: r, hitTile: null };
+
+    for (const tile of ordered) {
+      if (eliminated.has(tile)) continue;
+      const { col, row } = tile;
+      tmp[row][col] = null; // vacate current cell
+
+      // Slide tile as far as possible in the direction
+      let c = col, r = row;
+      let hitTile: TileData | null = null;
+      while (true) {
+        const nc = c + dc, nr = r + dr;
+        if (nc < 0 || nc >= this.cols || nr < 0 || nr >= this.rows) break;
+        if (tmp[nr][nc] !== null) { hitTile = tmp[nr][nc]; break; }
+        c = nc; r = nr;
+      }
+
+      if (hitTile && hitTile.color === tile.color && !eliminated.has(hitTile)) {
+        // Same-color collision → both eliminated
+        eliminated.add(tile);
+        eliminated.add(hitTile);
+        tmp[hitTile.row][hitTile.col] = null;
+        // The moving tile slides TO the partner's position for animation
+        moves.set(tile, { tile, toCol: hitTile.col, toRow: hitTile.row, eliminated: true, partner: hitTile });
+        moves.set(hitTile, { tile: hitTile, toCol: hitTile.col, toRow: hitTile.row, eliminated: true, partner: tile });
+      } else {
+        // Place tile at destination
+        tmp[r][c] = tile;
+        moves.set(tile, { tile, toCol: c, toRow: r, eliminated: false });
+      }
+    }
+
+    // Return only tiles that actually need animation (moved or eliminated)
+    return Array.from(moves.values()).filter(
+      m => m.eliminated || m.toCol !== m.tile.col || m.toRow !== m.tile.row
+    );
   }
 
-  private executeSlide(tile: TileData, toCol: number, toRow: number, hitTile: TileData | null): void {
-    this.grid[tile.row][tile.col] = null;
-    tile.idleTween?.stop();
-    // Snap container Y to base (bob may have offset it)
-    tile.container.y = this.tileY(tile.row);
+  // Animate all moves simultaneously, then pop eliminated pairs and update grid.
+  private executeAllSlides(moves: TileMove[]): void {
+    // Clear every moving tile from its current grid position
+    moves.forEach(m => { this.grid[m.tile.row][m.tile.col] = null; });
 
-    this.tweens.add({
-      targets: tile.container,
-      x: this.tileX(toCol),
-      y: this.tileY(toRow),
-      duration: 180,
-      ease: 'Cubic.easeOut',
-      onComplete: () => {
-        tile.col = toCol;
-        tile.row = toRow;
-        tile.container.x = this.tileX(toCol);
-        tile.container.y = this.tileY(toRow);
+    // Stop idle tweens and snap Y to grid base (bob offset)
+    moves.forEach(m => {
+      m.tile.idleTween?.stop();
+      m.tile.container.y = this.tileY(m.tile.row);
+    });
 
-        if (hitTile && hitTile.color === tile.color) {
-          // Match — pop both
-          const px = this.tileX(toCol) + this.tileSize / 2;
-          const py = this.tileY(toRow) + this.tileSize / 2;
-          this.popEffect(px, py, PALETTE[tile.color].light);
-          this.popTile(tile);
-          this.popTile(hitTile);
-          this.selected = null;
-          this.selGfx.clear();
-          this.time.delayedCall(360, () => {
-            this.locked = false;
-            this.checkEndCondition();
-          });
-        } else {
-          // No match — place tile back
-          this.grid[toRow][toCol] = tile;
-          tile.idleTween = this.tweens.add({
-            targets: tile.container,
-            y: tile.container.y - 4,
-            duration: 1100,
-            ease: 'Sine.easeInOut',
-            yoyo: true, repeat: -1,
-          });
-          this.selected = tile;
-          this.drawSelection();
-          this.tweens.add({ targets: tile.container, scaleX: 1.09, scaleY: 1.09, duration: 0 });
-          this.locked = false;
-          if (this.movesLeft <= 0) {
-            this.time.delayedCall(300, () => this.showResult(false));
-          }
-        }
-      },
+    let done = 0;
+    const total = moves.length;
+
+    const onAllAnimated = () => {
+      // Pop eliminated pairs
+      const seenPairs = new Set<TileData>();
+      moves.filter(m => m.eliminated).forEach(m => {
+        if (seenPairs.has(m.tile)) return;
+        seenPairs.add(m.tile);
+        if (m.partner) seenPairs.add(m.partner);
+        const px = this.tileX(m.toCol) + this.tileSize / 2;
+        const py = this.tileY(m.toRow) + this.tileSize / 2;
+        this.popEffect(px, py, PALETTE[m.tile.color].light);
+        this.popTile(m.tile);
+        if (m.partner) this.popTile(m.partner);
+      });
+
+      // Settle surviving tiles into their new grid positions
+      moves.filter(m => !m.eliminated).forEach(m => {
+        m.tile.col = m.toCol;
+        m.tile.row = m.toRow;
+        m.tile.container.x = this.tileX(m.toCol);
+        m.tile.container.y = this.tileY(m.toRow);
+        this.grid[m.toRow][m.toCol] = m.tile;
+        m.tile.idleTween = this.tweens.add({
+          targets: m.tile.container,
+          y: m.tile.container.y - 4,
+          duration: 1100, ease: 'Sine.easeInOut',
+          yoyo: true, repeat: -1,
+        });
+      });
+
+      const hasEliminations = moves.some(m => m.eliminated);
+      this.time.delayedCall(hasEliminations ? 320 : 0, () => {
+        this.locked = false;
+        this.checkEndCondition();
+      });
+    };
+
+    // Animate all tiles simultaneously
+    moves.forEach(m => {
+      this.tweens.add({
+        targets: m.tile.container,
+        x: this.tileX(m.toCol),
+        y: this.tileY(m.toRow),
+        duration: 190,
+        ease: 'Cubic.easeOut',
+        onComplete: () => { if (++done === total) onAllAnimated(); },
+      });
     });
   }
 
   private popTile(tile: TileData): void {
     tile.idleTween?.stop();
-    this.grid[tile.row][tile.col] = null;
     this.tweens.add({
       targets: tile.container,
       scaleX: 1.35, scaleY: 1.35, alpha: 0,
@@ -577,9 +592,9 @@ export class GameScene extends Phaser.Scene {
   private checkEndCondition(): void {
     const anyLeft = this.grid.some(r => r.some(t => t !== null));
     if (!anyLeft) {
-      this.time.delayedCall(350, () => this.showResult(true));
+      this.showResult(true);
     } else if (this.movesLeft <= 0) {
-      this.time.delayedCall(350, () => this.showResult(false));
+      this.showResult(false);
     }
   }
 
