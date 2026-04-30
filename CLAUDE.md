@@ -50,4 +50,4 @@ Level progress stored in `registry` (session) and `unboxy.saves.set('progress', 
 On first boot, `checkSavedProgress()` async-loads saved level and restarts the scene if needed.
 
 ## Last change (this session)
-Replaced D-pad buttons with keyboard (arrow/WASD) for desktop and swipe gesture for touch screens. Board now uses more vertical space. Restart button remains at bottom center.
+Fixed keyboard input: switched from Phaser keyboard plugin (unreliable in iframes) to window.addEventListener('keydown') which fires regardless of canvas focus. Arrow keys and WASD now reliably slide selected tiles.

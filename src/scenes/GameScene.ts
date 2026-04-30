@@ -218,16 +218,26 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ─── Keyboard (desktop) ──────────────────────────────────────────────────────
+  // Uses window.addEventListener so it works regardless of canvas focus,
+  // which is critical inside iframes and embedded players.
 
   private setupKeyboard(): void {
-    this.input.keyboard?.on('keydown', (e: KeyboardEvent) => {
-      const map: Record<string, 'up' | 'down' | 'left' | 'right'> = {
-        ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
-        w: 'up', s: 'down', a: 'left', d: 'right',
-        W: 'up', S: 'down', A: 'left', D: 'right',
-      };
-      if (map[e.key]) this.slide(map[e.key]);
-    });
+    const DIRS: Record<string, 'up' | 'down' | 'left' | 'right'> = {
+      ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+      w: 'up', s: 'down', a: 'left', d: 'right',
+      W: 'up', S: 'down', A: 'left', D: 'right',
+    };
+
+    const handler = (e: KeyboardEvent) => {
+      const dir = DIRS[e.key];
+      if (!dir) return;
+      e.preventDefault(); // stop arrow keys scrolling the page
+      this.slide(dir);
+    };
+
+    window.addEventListener('keydown', handler);
+    // Clean up when scene shuts down (restart, transition, etc.)
+    this.events.once('shutdown', () => window.removeEventListener('keydown', handler));
   }
 
   // ─── Swipe (touch / mouse drag) ──────────────────────────────────────────────
