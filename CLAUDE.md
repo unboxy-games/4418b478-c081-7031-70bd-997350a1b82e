@@ -48,6 +48,10 @@
 - All rexUI scenes declare `rexUI!: any`
 
 ## This turn
-- Redesigned TitleScene: polished landing screen with staggered letter animation, player control cards, VS badge, radial glow
-- Replaced text start prompt with a proper rexUI Buttons Start button with hover color feedback
-- Installed phaser3-rex-plugins and wired up UIPlugin in main.ts
+- Added abstract geometric background to TitleScene via `drawGeometricBg()`:
+  - Filled translucent hexagons, triangles, and diamond shapes at low opacity in muted blues/purples
+  - Wireframe outlines on each polygon at slightly higher opacity for depth
+  - Three wireframe circles of varying radii overlapping the layout
+  - Thin diagonal crossing lines for grid-like feel
+  - Small glowing dots at polygon vertex positions as accent details
+  - All shapes sit at depth 0, behind all existing title content

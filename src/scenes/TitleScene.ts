@@ -16,9 +16,12 @@ export class TitleScene extends Phaser.Scene {
     bg.fillGradientStyle(0x020510, 0x020510, 0x060d1e, 0x060d1e, 1);
     bg.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
+    // Abstract geometric layer
+    this.drawGeometricBg();
+
     // Subtle radial glow behind title
     const glow = this.add.graphics().setDepth(0);
-    glow.fillStyle(0x1a2d6b, 0.25);
+    glow.fillStyle(0x1a2d6b, 0.30);
     glow.fillEllipse(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 80, 700, 360);
 
     // ── Court divider ───────────────────────────────────────────────────────
@@ -195,6 +198,87 @@ export class TitleScene extends Phaser.Scene {
       fontFamily: 'monospace',
       color: '#1e2840',
     }).setOrigin(0.5).setDepth(2);
+  }
+
+  private drawGeometricBg(): void {
+    const g = this.add.graphics().setDepth(0);
+
+    // Helper: points for a regular polygon
+    const polyPts = (cx: number, cy: number, r: number, sides = 6, rot = 0) =>
+      Array.from({ length: sides }, (_, i) => {
+        const a = (Math.PI * 2 / sides) * i + rot;
+        return new Phaser.Geom.Point(cx + r * Math.cos(a), cy + r * Math.sin(a));
+      });
+
+    // ── Filled polygon blobs ────────────────────────────────────────────────
+
+    // Large hexagon — top-left
+    g.fillStyle(0x1a33bb, 0.08);
+    g.fillPoints(polyPts(110, 155, 135), true);
+
+    // Large hexagon — bottom-right
+    g.fillStyle(0x0d2280, 0.07);
+    g.fillPoints(polyPts(GAME_WIDTH - 135, GAME_HEIGHT - 115, 155), true);
+
+    // Medium hexagon — top-right, rotated 30°
+    g.fillStyle(0x3311aa, 0.07);
+    g.fillPoints(polyPts(GAME_WIDTH - 190, 148, 105, 6, Math.PI / 6), true);
+
+    // Triangle — bottom-left
+    g.fillStyle(0x1144bb, 0.06);
+    g.fillPoints(polyPts(190, GAME_HEIGHT - 90, 170, 3, 0), true);
+
+    // Triangle — upper-right area
+    g.fillStyle(0x220066, 0.06);
+    g.fillPoints(polyPts(GAME_WIDTH - 95, 285, 125, 3, Math.PI / 5), true);
+
+    // Small diamond (square rotated 45°) — left center
+    g.fillStyle(0x2255cc, 0.06);
+    g.fillPoints(polyPts(60, GAME_HEIGHT / 2 + 60, 70, 4, Math.PI / 4), true);
+
+    // Small diamond — right center
+    g.fillStyle(0x441188, 0.06);
+    g.fillPoints(polyPts(GAME_WIDTH - 60, GAME_HEIGHT / 2 - 60, 80, 4, Math.PI / 4), true);
+
+    // ── Wireframe outlines (slightly brighter) ──────────────────────────────
+
+    g.lineStyle(1, 0x4466dd, 0.14);
+    g.strokePoints(polyPts(110, 155, 135), true);
+    g.strokePoints(polyPts(GAME_WIDTH - 135, GAME_HEIGHT - 115, 155), true);
+
+    g.lineStyle(1, 0x6644cc, 0.12);
+    g.strokePoints(polyPts(GAME_WIDTH - 190, 148, 105, 6, Math.PI / 6), true);
+    g.strokePoints(polyPts(190, GAME_HEIGHT - 90, 170, 3, 0), true);
+    g.strokePoints(polyPts(GAME_WIDTH - 95, 285, 125, 3, Math.PI / 5), true);
+
+    g.lineStyle(1, 0x3366ee, 0.12);
+    g.strokePoints(polyPts(60, GAME_HEIGHT / 2 + 60, 70, 4, Math.PI / 4), true);
+    g.strokePoints(polyPts(GAME_WIDTH - 60, GAME_HEIGHT / 2 - 60, 80, 4, Math.PI / 4), true);
+
+    // ── Wireframe circles ────────────────────────────────────────────────────
+    g.lineStyle(1, 0x2244aa, 0.09);
+    g.strokeCircle(GAME_WIDTH / 2 - 310, GAME_HEIGHT / 2 + 95, 210);
+    g.strokeCircle(GAME_WIDTH / 2 + 295, GAME_HEIGHT / 2 - 55, 185);
+    g.strokeCircle(GAME_WIDTH / 2, GAME_HEIGHT / 2 + 50, 340);
+
+    // ── Thin diagonal lines ─────────────────────────────────────────────────
+    g.lineStyle(1, 0x1a2d8a, 0.09);
+    g.lineBetween(0, 0, GAME_WIDTH * 0.55, GAME_HEIGHT);
+    g.lineBetween(GAME_WIDTH, 0, GAME_WIDTH * 0.45, GAME_HEIGHT);
+    g.lineBetween(0, GAME_HEIGHT, GAME_WIDTH * 0.28, 0);
+    g.lineBetween(GAME_WIDTH, GAME_HEIGHT, GAME_WIDTH * 0.72, 0);
+    // Cross accent lines
+    g.lineStyle(1, 0x2233aa, 0.07);
+    g.lineBetween(0, GAME_HEIGHT * 0.35, GAME_WIDTH * 0.4, 0);
+    g.lineBetween(GAME_WIDTH, GAME_HEIGHT * 0.65, GAME_WIDTH * 0.6, GAME_HEIGHT);
+
+    // ── Small accent dots at polygon vertices ───────────────────────────────
+    const dotPts = [
+      ...polyPts(110, 155, 135),
+      ...polyPts(GAME_WIDTH - 135, GAME_HEIGHT - 115, 155),
+    ];
+    g.fillStyle(0x4466ff, 0.18);
+    dotPts.forEach(p => g.fillCircle(p.x, p.y, 2.5));
   }
 
   private drawDivider(): void {
