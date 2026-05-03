@@ -11,7 +11,7 @@
 - Win: clear ALL tiles within the move limit
 - Fail: run out of moves with tiles remaining, OR no valid groups left before clearing
 
-## Features implemented (turn 3 — split groups + bottom-stack fix)
+## Features implemented (turn 4 — start screen)
 - **10 hand-crafted levels** of increasing difficulty
 - **Level data format changed**: `LevelDef.cols: number[][]` — each column is a stack of colorIds from BOTTOM to TOP (removed `parseGrid`)
 - **Tiles always start packed at the bottom** — `loadLevel()` places tiles from `ROWS-1` upward; no floating tiles, no fall animation on first tap
@@ -27,9 +27,12 @@
 - **Tile art**: 4 distinct colour × marking combinations (bumps/frame/orb/hourglass) with 3D effect + idle bob
 
 ## Key implementation details
+- `StartScene.ts` — start screen with title, decorative tiles, PLAY button (uipack_rpg_sheet atlas frame `buttonLong_beige_pressed.png`), high score display
 - `GameScene.ts` — all game logic, visuals, level data, and HUD
 - `UIScene.ts` — intentionally empty overlay
-- `main.ts` — exports `unboxyReady = Unboxy.init().catch(() => null)`
+- `main.ts` — exports `unboxyReady = Unboxy.init().catch(() => null)`; scene order: BootScene → StartScene → GameScene → UIScene
+- `BootScene.ts` — preloads `uipack_rpg_sheet` atlas (atlasXML), starts `StartScene`
+- `uploaded/uipack_rpg_sheet.png` + `uploaded/uipack_rpg_sheet.xml` — 87-frame atlas (Kenney UIpack RPG)
 - Grid: `grid[col][row]: Cell | null`, col=0-6 left→right, row=0-8 top→bottom
 - Tile pixel centre: `x = TILE_OX + col*82`, `y = TILE_OY + row*82`
 - Constants: `TILE_OX=114`, `TILE_OY=245`, `PANEL_X=61`, `PANEL_Y=192`

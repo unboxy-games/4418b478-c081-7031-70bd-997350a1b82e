@@ -10,13 +10,14 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Load assets here, e.g.:
-    // this.load.image('player', 'assets/player.png');
-    // this.load.spritesheet('enemy', 'assets/enemy.png', { frameWidth: 32, frameHeight: 32 });
-    // this.load.audio('bgm', 'assets/bgm.mp3');
+    this.load.atlasXML(
+      'uipack_rpg_sheet',
+      'uploaded/uipack_rpg_sheet.png',
+      'uploaded/uipack_rpg_sheet.xml',
+    );
   }
 
   create(): void {
-    this.scene.start('GameScene');
+    this.scene.start('StartScene');
   }
 }
