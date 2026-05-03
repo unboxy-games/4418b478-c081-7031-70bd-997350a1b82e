@@ -48,10 +48,13 @@
 - All rexUI scenes declare `rexUI!: any`
 
 ## This turn
-- Added `tile_0002.png` (Pixel Platformer vehicle sprite from library) as a decorative car on the title screen (bottom-right, depth 2, 3.5× scale, fades in at delay 700ms)
-- BootScene now has a loading bar and registers the `tile_0002` image in the asset manifest
+- Added `impactmetal_light_004.ogg` (Impact Sounds, variant 5) as bounce SFX
+- BootScene loads `bounceSfx` audio key from `uploaded/impactmetal_light_004.ogg`
+- GameScene plays it on every paddle hit (volume 0.7) and wall bounce (volume 0.4)
 
 ## Previous turns
+- Added `tile_0002.png` (Pixel Platformer vehicle sprite from library) as a decorative car on the title screen (bottom-right, depth 2, 3.5× scale, fades in at delay 700ms)
+- BootScene now has a loading bar and registers the `tile_0002` image in the asset manifest
 - Added abstract geometric background to TitleScene via `drawGeometricBg()`:
   - Filled translucent hexagons, triangles, and diamond shapes at low opacity in muted blues/purples
   - Wireframe outlines on each polygon at slightly higher opacity for depth

@@ -43,6 +43,9 @@ export class GameScene extends Phaser.Scene {
   private rScoreTxt!: Phaser.GameObjects.Text;
   private flashGfx!: Phaser.GameObjects.Graphics;
 
+  // Audio
+  private bounceSfx!: Phaser.Sound.BaseSound;
+
   // Keys
   private wKey!: Phaser.Input.Keyboard.Key;
   private sKey!: Phaser.Input.Keyboard.Key;
@@ -65,6 +68,7 @@ export class GameScene extends Phaser.Scene {
     this.trail = [];
     this.state = 'countdown';
 
+    this.bounceSfx = this.sound.add('bounceSfx');
     this.ensureParticleTexture();
     this.buildBackground();
     this.buildPaddles();
@@ -308,11 +312,13 @@ export class GameScene extends Phaser.Scene {
     this.spawnParticles(this.bX, this.bY, tint);
     this.doFlash(side === 'left' ? 0x1a3388 : 0x884411, 0.14);
     this.cameras.main.shake(55, 0.005);
+    this.bounceSfx.play({ volume: 0.7 });
   }
 
   private onWallBounce(): void {
     this.spawnParticles(this.bX, this.bY, 0xccddff);
     this.cameras.main.shake(35, 0.002);
+    this.bounceSfx.play({ volume: 0.4 });
   }
 
   private spawnParticles(x: number, y: number, tint: number): void {

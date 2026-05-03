@@ -43,6 +43,7 @@ export class BootScene extends Phaser.Scene {
 
     // Asset manifest
     this.load.image('tile_0002', 'uploaded/tile_0002.png');
+    this.load.audio('bounceSfx', 'uploaded/impactmetal_light_004.ogg');
   }
 
   create(): void {
