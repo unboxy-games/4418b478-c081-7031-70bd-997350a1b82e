@@ -27,7 +27,7 @@
 - **Tile art**: 4 distinct colour × marking combinations (bumps/frame/orb/hourglass) with 3D effect + idle bob
 
 ## Key implementation details
-- `StartScene.ts` — start screen with title, decorative tiles, PLAY button (uipack_rpg_sheet atlas frame `buttonLong_beige_pressed.png`), high score display
+- `StartScene.ts` — start screen with title banner (`buttonLong_grey_pressed.png` atlas frame scaled to 590×150), decorative tiles, PLAY button (`buttonLong_beige_pressed.png` atlas frame), high score display
 - `GameScene.ts` — all game logic, visuals, level data, and HUD
 - `UIScene.ts` — intentionally empty overlay
 - `main.ts` — exports `unboxyReady = Unboxy.init().catch(() => null)`; scene order: BootScene → StartScene → GameScene → UIScene

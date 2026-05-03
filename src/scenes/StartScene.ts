@@ -86,33 +86,28 @@ export class StartScene extends Phaser.Scene {
 
   private drawTitlePanel(): void {
     const cx = GAME_WIDTH / 2;
-    const panelW = 590, panelH = 150;
-    const panelY = 108;
+    // Target display size for the title banner
+    const bannerW = 590, bannerH = 150;
+    // buttonLong_grey_pressed native size in the Kenney atlas is 190 × 49 px
+    const nativeW = 190, nativeH = 49;
+    const bannerCY = 183; // vertical centre of the banner area
 
-    // Sandy panel with green border
-    const panel = this.add.graphics().setDepth(2);
-    panel.fillStyle(0x000000, 0.30);
-    panel.fillRoundedRect(cx - panelW / 2 + 5, panelY + 8, panelW, panelH, 22);
-    panel.fillStyle(0xd0b468, 1);
-    panel.fillRoundedRect(cx - panelW / 2, panelY, panelW, panelH, 22);
-    panel.fillStyle(0xdec07c, 0.55);
-    panel.fillRoundedRect(cx - panelW / 2 + 4, panelY + 4, panelW - 8, panelH - 8, 18);
-    panel.fillStyle(0xecd490, 0.50);
-    panel.fillRoundedRect(cx - panelW / 2 + 8, panelY + 8, panelW - 16, 14, { tl: 14, tr: 14, bl: 0, br: 0 });
-    panel.lineStyle(2, 0x8a6420, 0.45);
-    panel.strokeRoundedRect(cx - panelW / 2 + 3, panelY + 3, panelW - 6, panelH - 6, 19);
+    // Atlas frame as the banner background — scale to fill our target size
+    this.add.image(cx, bannerCY, 'uipack_rpg_sheet', 'buttonLong_grey_pressed.png')
+      .setScale(bannerW / nativeW, bannerH / nativeH)
+      .setDepth(2);
 
-    // Title text
-    const title = this.add.text(cx, panelY + 56, 'Bubble Popper', {
-      fontSize: '54px', fontStyle: 'bold', color: '#1e3810',
-      stroke: '#8a6420', strokeThickness: 4,
-      shadow: { offsetX: 0, offsetY: 3, color: '#c8a830', blur: 0, fill: true },
+    // Title text — sits on the grey frame; light colours read well against it
+    const title = this.add.text(cx, bannerCY - 22, 'Bubble Popper', {
+      fontSize: '54px', fontStyle: 'bold', color: '#d4e868',
+      stroke: '#1e3810', strokeThickness: 5,
+      shadow: { offsetX: 2, offsetY: 4, color: '#0c1c06', blur: 6, stroke: true, fill: true },
     }).setOrigin(0.5).setDepth(10);
-    this.tweens.add({ targets: title, y: panelY + 52, duration: 2400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.tweens.add({ targets: title, y: bannerCY - 26, duration: 2400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     // Subtitle
-    this.add.text(cx, panelY + 112, 'A colour-match puzzle game', {
-      fontSize: '22px', color: '#2c5a1a', stroke: '#d0b468', strokeThickness: 2,
+    this.add.text(cx, bannerCY + 42, 'A colour-match puzzle game', {
+      fontSize: '22px', color: '#a0c870', stroke: '#1e3810', strokeThickness: 2,
     }).setOrigin(0.5).setDepth(10);
   }
 
