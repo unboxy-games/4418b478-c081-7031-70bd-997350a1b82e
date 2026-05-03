@@ -192,6 +192,13 @@ export class TitleScene extends Phaser.Scene {
     // Also keep keyboard shortcut
     this.input.keyboard!.once('keydown-SPACE', go);
 
+    // ── Decorative car ───────────────────────────────────────────────────────
+    const car = this.add.image(GAME_WIDTH / 2 + 320, GAME_HEIGHT - 90, 'tile_0002')
+      .setScale(3.5)
+      .setDepth(2)
+      .setAlpha(0);
+    this.tweens.add({ targets: car, alpha: 0.75, duration: 500, delay: 700 });
+
     // ── ESC hint ────────────────────────────────────────────────────────────
     this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 22, 'SPACE  or  CLICK TO START', {
       fontSize: '12px',

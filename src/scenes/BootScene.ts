@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
+import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 
 /**
  * BootScene - loads assets before the game starts.
- * Add your asset loading here (images, spritesheets, audio, etc.).
  */
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -10,10 +10,39 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Load assets here, e.g.:
-    // this.load.image('player', 'assets/player.png');
-    // this.load.spritesheet('enemy', 'assets/enemy.png', { frameWidth: 32, frameHeight: 32 });
-    // this.load.audio('bgm', 'assets/bgm.mp3');
+    // Loading bar UI
+    const cx = GAME_WIDTH / 2;
+    const cy = GAME_HEIGHT / 2;
+    const barW = Math.min(480, GAME_WIDTH * 0.6);
+    const barH = 24;
+
+    const label = this.add.text(cx, cy - 40, 'Loading...', {
+      fontFamily: 'sans-serif',
+      fontSize: '20px',
+      color: '#ffffff',
+    }).setOrigin(0.5);
+
+    const track = this.add.rectangle(cx, cy, barW, barH, 0x222222).setStrokeStyle(2, 0xffffff);
+    const fill = this.add.rectangle(cx - barW / 2 + 2, cy, 0, barH - 4, 0xffffff).setOrigin(0, 0.5);
+    const pctText = this.add.text(cx, cy + 30, '0%', {
+      fontFamily: 'sans-serif',
+      fontSize: '14px',
+      color: '#cccccc',
+    }).setOrigin(0.5);
+
+    this.load.on('progress', (value: number) => {
+      fill.width = (barW - 4) * value;
+      pctText.setText(`${Math.round(value * 100)}%`);
+    });
+    this.load.on('complete', () => {
+      label.destroy();
+      track.destroy();
+      fill.destroy();
+      pctText.destroy();
+    });
+
+    // Asset manifest
+    this.load.image('tile_0002', 'uploaded/tile_0002.png');
   }
 
   create(): void {

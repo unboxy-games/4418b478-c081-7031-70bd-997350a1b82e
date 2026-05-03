@@ -48,6 +48,10 @@
 - All rexUI scenes declare `rexUI!: any`
 
 ## This turn
+- Added `tile_0002.png` (Pixel Platformer vehicle sprite from library) as a decorative car on the title screen (bottom-right, depth 2, 3.5× scale, fades in at delay 700ms)
+- BootScene now has a loading bar and registers the `tile_0002` image in the asset manifest
+
+## Previous turns
 - Added abstract geometric background to TitleScene via `drawGeometricBg()`:
   - Filled translucent hexagons, triangles, and diamond shapes at low opacity in muted blues/purples
   - Wireframe outlines on each polygon at slightly higher opacity for depth
