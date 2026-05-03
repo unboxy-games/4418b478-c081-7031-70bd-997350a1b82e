@@ -5,9 +5,21 @@
 
 ## Scenes
 - **BootScene** → boots to TitleScene
-- **TitleScene** — "PONG" title, player control labels, click/space to start
+- **TitleScene** — polished landing screen with rexUI Start button (see below)
 - **GameScene** — full gameplay (see below)
 - **UIScene** — placeholder (Pong manages its own HUD in GameScene)
+
+## TitleScene implementation details
+- Dark gradient background with a radial glow behind the title
+- "PONG" title rendered as 4 individual animated letters (staggered Back.Out bounce-in)
+- Decorative ghost paddles, ball, and court boundary lines (low-opacity)
+- Dashed center divider (same as GameScene)
+- Player control cards for P1 (blue, W/S) and P2 (orange, ↑/↓) with rounded-rect borders
+- VS badge between the cards
+- "FIRST TO 7 POINTS WINS" notice
+- **rexUI Start button** — `this.rexUI.add.buttons()` with a single Label child; hover swaps background color; click fades out and starts GameScene
+- SPACE key also triggers start (keyboard shortcut)
+- rexUI plugin registered in `main.ts` via `plugins.scene`
 
 ## GameScene implementation details
 - **Left paddle (Player 1):** W / S keys, blue (#4488dd), drawn each frame with Graphics
@@ -29,7 +41,13 @@
 - `PX_L=58, PX_R=GAME_WIDTH-74` paddle X positions
 - `PADDLE_SPEED=560`, `BASE_SPEED=420`, `MAX_SPEED=740`, `WINNING_SCORE=7`
 
+## Plugin setup
+- `phaser3-rex-plugins@^1.1` installed
+- `UIPlugin` registered in `main.ts` as `{ key: 'rexUI', plugin: UIPlugin, mapping: 'rexUI' }`
+- Type declaration at `src/types/rexui.d.ts`
+- All rexUI scenes declare `rexUI!: any`
+
 ## This turn
-- Created game from scratch: TitleScene, GameScene (full Pong), minimal UIScene
-- Updated BootScene to start TitleScene
-- Updated main.ts to register TitleScene
+- Redesigned TitleScene: polished landing screen with staggered letter animation, player control cards, VS badge, radial glow
+- Replaced text start prompt with a proper rexUI Buttons Start button with hover color feedback
+- Installed phaser3-rex-plugins and wired up UIPlugin in main.ts
