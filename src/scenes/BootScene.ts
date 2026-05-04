@@ -44,6 +44,11 @@ export class BootScene extends Phaser.Scene {
     // Asset manifest
     this.load.image('tile_0002', 'uploaded/tile_0002.png');
     this.load.audio('bounceSfx', 'uploaded/impactmetal_light_004.ogg');
+
+    // Knight hero sprites (3 frames for animation)
+    this.load.image('knightIdle',  'uploaded/hero_knight_1_dcdll.png');
+    this.load.image('knightWalk1', 'uploaded/hero_knight_walking_2_dtx8y.jpg');
+    this.load.image('knightWalk2', 'uploaded/hero_knight_walk_right_dff4m.png');
   }
 
   create(): void {

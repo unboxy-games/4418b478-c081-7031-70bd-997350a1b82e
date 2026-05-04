@@ -1,8 +1,24 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 
+// Knight walk frames in order
+const KNIGHT_WALK_FRAMES = ['knightWalk1', 'knightWalk2'];
+const KNIGHT_IDLE_FRAME  = 'knightIdle';
+const KNIGHT_SPEED       = 200; // px/s
+const KNIGHT_FRAME_MS    = 140; // ms per walk frame
+
 export class TitleScene extends Phaser.Scene {
   declare rexUI: any;
+
+  private knight!: Phaser.GameObjects.Image;
+  private knightKeys!: {
+    left: Phaser.Input.Keyboard.Key;
+    right: Phaser.Input.Keyboard.Key;
+    up: Phaser.Input.Keyboard.Key;
+    down: Phaser.Input.Keyboard.Key;
+  };
+  private knightFrameIdx  = 0;
+  private knightFrameMs   = 0;
 
   constructor() {
     super({ key: 'TitleScene' });
@@ -205,6 +221,67 @@ export class TitleScene extends Phaser.Scene {
       fontFamily: 'monospace',
       color: '#1e2840',
     }).setOrigin(0.5).setDepth(2);
+
+    // ── Controllable knight ──────────────────────────────────────────────────
+    this.knight = this.add.image(160, GAME_HEIGHT - 110, KNIGHT_IDLE_FRAME)
+      .setScale(0.14)
+      .setDepth(6)
+      .setAlpha(0);
+
+    this.tweens.add({ targets: this.knight, alpha: 1, duration: 500, delay: 800 });
+
+    // Arrow-key hint beneath the knight
+    const knightHint = this.add.text(160, GAME_HEIGHT - 48, '← → ↑ ↓  move knight', {
+      fontSize: '11px',
+      fontFamily: 'monospace',
+      color: '#2a3d6a',
+    }).setOrigin(0.5).setDepth(6).setAlpha(0);
+    this.tweens.add({ targets: knightHint, alpha: 1, duration: 400, delay: 950 });
+
+    // Keyboard bindings (separate from SPACE/ESC used elsewhere)
+    this.knightKeys = this.input.keyboard!.addKeys({
+      left:  Phaser.Input.Keyboard.KeyCodes.LEFT,
+      right: Phaser.Input.Keyboard.KeyCodes.RIGHT,
+      up:    Phaser.Input.Keyboard.KeyCodes.UP,
+      down:  Phaser.Input.Keyboard.KeyCodes.DOWN,
+    }) as any;
+  }
+
+  update(_time: number, delta: number): void {
+    if (!this.knight || !this.knightKeys) return;
+
+    const dt = delta / 1000;
+    let dx = 0;
+    let dy = 0;
+
+    if (this.knightKeys.left.isDown)  { dx = -1; this.knight.setFlipX(true);  }
+    if (this.knightKeys.right.isDown) { dx =  1; this.knight.setFlipX(false); }
+    if (this.knightKeys.up.isDown)    { dy = -1; }
+    if (this.knightKeys.down.isDown)  { dy =  1; }
+
+    // Normalise diagonal
+    if (dx !== 0 && dy !== 0) { dx *= 0.707; dy *= 0.707; }
+
+    this.knight.x = Phaser.Math.Clamp(
+      this.knight.x + dx * KNIGHT_SPEED * dt, 40, GAME_WIDTH - 40,
+    );
+    this.knight.y = Phaser.Math.Clamp(
+      this.knight.y + dy * KNIGHT_SPEED * dt, 40, GAME_HEIGHT - 40,
+    );
+
+    const moving = dx !== 0 || dy !== 0;
+
+    if (moving) {
+      this.knightFrameMs += delta;
+      if (this.knightFrameMs >= KNIGHT_FRAME_MS) {
+        this.knightFrameMs = 0;
+        this.knightFrameIdx = (this.knightFrameIdx + 1) % KNIGHT_WALK_FRAMES.length;
+        this.knight.setTexture(KNIGHT_WALK_FRAMES[this.knightFrameIdx]);
+      }
+    } else {
+      this.knightFrameMs = 0;
+      this.knight.setTexture(KNIGHT_IDLE_FRAME);
+    }
   }
 
   private drawGeometricBg(): void {

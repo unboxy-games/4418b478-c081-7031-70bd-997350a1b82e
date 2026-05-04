@@ -48,11 +48,16 @@
 - All rexUI scenes declare `rexUI!: any`
 
 ## This turn
-- Added `impactmetal_light_004.ogg` (Impact Sounds, variant 5) as bounce SFX
-- BootScene loads `bounceSfx` audio key from `uploaded/impactmetal_light_004.ogg`
-- GameScene plays it on every paddle hit (volume 0.7) and wall bounce (volume 0.4)
+- Added controllable knight to TitleScene using 3 uploaded images as animation frames
+  - Keys: `knightIdle` (hero_knight_1_dcdll.png), `knightWalk1` (hero_knight_walking_2_dtx8y.jpg), `knightWalk2` (hero_knight_walk_right_dff4m.png)
+  - Arrow keys move the knight in all 4 directions; flips horizontally when moving left
+  - Walk frames cycle at 140 ms each; idle frame shown when stopped
+  - Knight starts at bottom-left (160, GAME_HEIGHT-110), scale 0.14, depth 6
+  - Small hint label "← → ↑ ↓  move knight" fades in below the sprite
+  - All 3 textures registered in BootScene.preload()
 
 ## Previous turns
+- Added `impactmetal_light_004.ogg` (Impact Sounds, variant 5) as bounce SFX
 - Added `tile_0002.png` (Pixel Platformer vehicle sprite from library) as a decorative car on the title screen (bottom-right, depth 2, 3.5× scale, fades in at delay 700ms)
 - BootScene now has a loading bar and registers the `tile_0002` image in the asset manifest
 - Added abstract geometric background to TitleScene via `drawGeometricBg()`:
