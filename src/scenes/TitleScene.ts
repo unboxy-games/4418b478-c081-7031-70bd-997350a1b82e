@@ -1,11 +1,13 @@
 import Phaser from 'phaser';
 import { GAME_WIDTH, GAME_HEIGHT } from '../config';
 
-// Knight walk frames in order
-const KNIGHT_WALK_FRAMES = ['knightWalk1', 'knightWalk2'];
-const KNIGHT_IDLE_FRAME  = 'knightIdle';
-const KNIGHT_SPEED       = 200; // px/s
-const KNIGHT_FRAME_MS    = 140; // ms per walk frame
+// Knight animation frame keys
+const KNIGHT_WALK_FRAMES   = ['knightWalk1', 'knightWalk2'];
+const KNIGHT_ATTACK_FRAMES = ['knightAttack1', 'knightAttack2'];
+const KNIGHT_IDLE_FRAME    = 'knightIdle';
+const KNIGHT_SPEED         = 200; // px/s
+const KNIGHT_FRAME_MS      = 140; // ms per walk frame
+const KNIGHT_ATTACK_MS     = 160; // ms per attack frame
 
 export class TitleScene extends Phaser.Scene {
   declare rexUI: any;
@@ -17,8 +19,10 @@ export class TitleScene extends Phaser.Scene {
     up: Phaser.Input.Keyboard.Key;
     down: Phaser.Input.Keyboard.Key;
   };
-  private knightFrameIdx  = 0;
-  private knightFrameMs   = 0;
+  private knightFrameIdx   = 0;
+  private knightFrameMs    = 0;
+  private knightState: 'idle' | 'walk' | 'attack' = 'idle';
+  private knightAttackMs   = 0;
 
   constructor() {
     super({ key: 'TitleScene' });
@@ -198,15 +202,15 @@ export class TitleScene extends Phaser.Scene {
 
     const go = () => {
       startBtn.off('button.click');
-      this.input.keyboard!.off('keydown-SPACE', go);
+      this.input.keyboard!.off('keydown-ENTER', go);
       this.cameras.main.fadeOut(300, 0, 0, 0);
       this.time.delayedCall(300, () => this.scene.start('GameScene'));
     };
 
     startBtn.on('button.click', go);
 
-    // Also keep keyboard shortcut
-    this.input.keyboard!.once('keydown-SPACE', go);
+    // ENTER starts the game (SPACE is reserved for knight attack)
+    this.input.keyboard!.once('keydown-ENTER', go);
 
     // ── Decorative car ───────────────────────────────────────────────────────
     const car = this.add.image(GAME_WIDTH / 2 + 320, GAME_HEIGHT - 90, 'tile_0002')
@@ -216,7 +220,7 @@ export class TitleScene extends Phaser.Scene {
     this.tweens.add({ targets: car, alpha: 0.75, duration: 500, delay: 700 });
 
     // ── ESC hint ────────────────────────────────────────────────────────────
-    this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 22, 'SPACE  or  CLICK TO START', {
+    this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 22, 'ENTER  or  CLICK TO START', {
       fontSize: '12px',
       fontFamily: 'monospace',
       color: '#1e2840',
@@ -238,18 +242,79 @@ export class TitleScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(6).setAlpha(0);
     this.tweens.add({ targets: knightHint, alpha: 1, duration: 400, delay: 950 });
 
-    // Keyboard bindings (separate from SPACE/ESC used elsewhere)
+    // Keyboard bindings (separate from ENTER/ESC used elsewhere)
     this.knightKeys = this.input.keyboard!.addKeys({
       left:  Phaser.Input.Keyboard.KeyCodes.LEFT,
       right: Phaser.Input.Keyboard.KeyCodes.RIGHT,
       up:    Phaser.Input.Keyboard.KeyCodes.UP,
       down:  Phaser.Input.Keyboard.KeyCodes.DOWN,
     }) as any;
+
+    // SPACE → knight attack
+    this.input.keyboard!.on('keydown-SPACE', () => {
+      if (this.knightState === 'attack') return; // already attacking
+      this.knightState    = 'attack';
+      this.knightAttackMs = 0;
+      this.knightFrameMs  = 0;
+      this.knight.setTexture(KNIGHT_ATTACK_FRAMES[0]);
+
+      // Punch-scale feedback
+      const base = 0.14;
+      this.tweens.add({
+        targets: this.knight,
+        scaleX: base * 1.18,
+        scaleY: base * 1.18,
+        duration: 70,
+        yoyo: true,
+        ease: 'Quad.Out',
+        onComplete: () => { this.knight.setScale(base); },
+      });
+
+      // Slash effect: a few white arcs that fade out quickly
+      const slash = this.add.graphics().setDepth(7);
+      const sx    = this.knight.flipX ? this.knight.x - 36 : this.knight.x + 36;
+      const sy    = this.knight.y - 8;
+      const dir   = this.knight.flipX ? -1 : 1;
+      slash.lineStyle(3, 0xffffff, 0.9);
+      slash.beginPath();
+      slash.arc(sx, sy, 28, Phaser.Math.DegToRad(-40 * dir - 30), Phaser.Math.DegToRad(-40 * dir + 30), false);
+      slash.strokePath();
+      slash.lineStyle(2, 0xaaddff, 0.7);
+      slash.beginPath();
+      slash.arc(sx, sy + 10, 20, Phaser.Math.DegToRad(-50 * dir - 25), Phaser.Math.DegToRad(-50 * dir + 25), false);
+      slash.strokePath();
+      this.tweens.add({
+        targets: slash,
+        alpha: 0,
+        duration: 220,
+        ease: 'Quad.In',
+        onComplete: () => slash.destroy(),
+      });
+    });
   }
 
   update(_time: number, delta: number): void {
     if (!this.knight || !this.knightKeys) return;
 
+    // ── Attack state: play 2 frames then return to idle ──────────────────────
+    if (this.knightState === 'attack') {
+      this.knightAttackMs += delta;
+      const frameIdx = Math.min(
+        Math.floor(this.knightAttackMs / KNIGHT_ATTACK_MS),
+        KNIGHT_ATTACK_FRAMES.length - 1,
+      );
+      this.knight.setTexture(KNIGHT_ATTACK_FRAMES[frameIdx]);
+
+      if (this.knightAttackMs >= KNIGHT_ATTACK_MS * KNIGHT_ATTACK_FRAMES.length) {
+        // Attack finished — resume idle/walk on next tick
+        this.knightState    = 'idle';
+        this.knightAttackMs = 0;
+        this.knight.setTexture(KNIGHT_IDLE_FRAME);
+      }
+      return; // lock movement during attack
+    }
+
+    // ── Movement ─────────────────────────────────────────────────────────────
     const dt = delta / 1000;
     let dx = 0;
     let dy = 0;
@@ -270,11 +335,12 @@ export class TitleScene extends Phaser.Scene {
     );
 
     const moving = dx !== 0 || dy !== 0;
+    this.knightState = moving ? 'walk' : 'idle';
 
     if (moving) {
       this.knightFrameMs += delta;
       if (this.knightFrameMs >= KNIGHT_FRAME_MS) {
-        this.knightFrameMs = 0;
+        this.knightFrameMs  = 0;
         this.knightFrameIdx = (this.knightFrameIdx + 1) % KNIGHT_WALK_FRAMES.length;
         this.knight.setTexture(KNIGHT_WALK_FRAMES[this.knightFrameIdx]);
       }

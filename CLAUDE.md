@@ -48,6 +48,15 @@
 - All rexUI scenes declare `rexUI!: any`
 
 ## This turn
+- Added SPACE attack to the knight in TitleScene
+  - Two attack frames: `knightAttack1` (hero_knight_attack_1_dhndt.png), `knightAttack2` (hero_knight_attack_2_dpc7x.png)
+  - SPACE key triggers attack: plays frame 1 → frame 2 (160 ms each), then returns to idle; movement locked during attack
+  - Punch-scale tween on attack start (scale × 1.18, yoyo) for impact feedback
+  - Slash arc drawn in front of the knight (direction-aware), fades out in 220 ms
+  - SPACE no longer starts the game — game start shortcut moved to ENTER; hint text updated accordingly
+  - Both new textures registered in BootScene.preload()
+
+## Previous turns
 - Added controllable knight to TitleScene using 3 uploaded images as animation frames
   - Keys: `knightIdle` (hero_knight_1_dcdll.png), `knightWalk1` (hero_knight_walking_2_dtx8y.jpg), `knightWalk2` (hero_knight_walk_right_dff4m.png)
   - Arrow keys move the knight in all 4 directions; flips horizontally when moving left
