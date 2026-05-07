@@ -11,7 +11,7 @@
 - Auto-scrolling player cube (speed = 450 px/s) with arcade physics gravity
 - Double-jump mechanic (SPACE, UP arrow, or mouse/touch click) — 2 jumps per airborne cycle; refills on landing
 - Spinning cube animation: rotates 216°/s in the air, snaps to nearest 90° on landing
-- 47 handcrafted obstacles across 13 000px level: single spikes → double → triple → block obstacles → intense mixed sections
+- 47 handcrafted obstacles across 18 000px level: single spikes → double → triple → block obstacles → intense mixed sections (gaps widened ~+100px each)
 - Spikes rendered at 0.65 scale (~39×39 px), base aligned to ground; hitbox = inner rect of scaled triangle (~10×26 px); blocks use 50×50
 - Dust particle burst on landing, blue square particle explosion on death
 - Camera shake + red flash on death
@@ -97,4 +97,4 @@
 - `NpcBot` interface + `NPC_CONFIGS` array defined at module level above the class
 
 ## What Changed This Turn
-- Added 3 NPC bots (Dash/Blaze/Nova) to always fill a 4-player race in both solo and online modes
+- Increased spacing between all obstacles by ~100px per gap; level width extended from 13 000px to 18 000px
