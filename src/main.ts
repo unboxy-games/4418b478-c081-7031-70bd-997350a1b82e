@@ -1,6 +1,7 @@
 import { createUnboxyGame, Unboxy } from "@unboxy/phaser-sdk";
 import { BootScene } from "./scenes/BootScene";
 import { MenuScene } from "./scenes/MenuScene";
+import { LevelSelectScene } from "./scenes/LevelSelectScene";
 import { GameScene } from "./scenes/GameScene";
 import { UIScene } from "./scenes/UIScene";
 import { GAME_WIDTH, GAME_HEIGHT } from "./config";
@@ -14,7 +15,7 @@ export const unboxyReady = Unboxy.init({ standaloneGameId: 'geometry-dash-clone'
 createUnboxyGame({
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
-  scenes: [BootScene, MenuScene, GameScene, UIScene],
+  scenes: [BootScene, MenuScene, LevelSelectScene, GameScene, UIScene],
   plugins: {
     scene: [
       { key: 'rexUI', plugin: UIPlugin, mapping: 'rexUI' },

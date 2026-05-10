@@ -7,8 +7,9 @@
 
 ## Features Implemented
 - **Main Menu** (MenuScene): SOLO PLAY + ONLINE CO-OP + LEADERBOARD buttons; animated bouncing preview cubes; star background
+- **Level Select** (LevelSelectScene): 3 level cards with name, difficulty stars, personal best %, lock/unlock status; loads bests async then renders cards
 - **Online Co-op**: Lobby waits for a second player, 3-2-1 GO! countdown, then both players race the same level simultaneously
-- Auto-scrolling player cube (speed = 450 px/s) with arcade physics gravity
+- Auto-scrolling player cube (speed varies by level) with arcade physics gravity
 - Double-jump mechanic (SPACE, UP arrow, or mouse/touch click) — 2 jumps per airborne cycle; refills on landing
 - Spinning cube animation: rotates 216°/s in the air, snaps to nearest 90° on landing
 - 47 handcrafted obstacles across 18 000px level: single spikes → double → triple → block obstacles → intense mixed sections (gaps widened ~+100px each)
@@ -24,7 +25,7 @@
 - Attempt count persists across restarts via `game.registry`
 
 ## High Score & Leaderboard
-- **Personal best** saved to `unboxy.saves` (key: `highScore`; highest % reached = better, 0–100)
+- **Personal best** saved per level: `highScore` (L1), `highScore_2` (L2), `highScore_3` (L3)
   - Loaded at the start of each GameScene `create()` via `loadPersonalBest()`
   - `currentRunMaxPct` tracks the highest % reached each run (updated in `update()`)
   - Saved on **death** if `currentRunMaxPct > personalBest` (so players see progress even without completing)
@@ -96,5 +97,20 @@
 - `isMultiplayer` is now read from registry BEFORE `buildNpcs()` so bot count is correct
 - `NpcBot` interface + `NPC_CONFIGS` array defined at module level above the class
 
+## Levels
+- **Level 1 — The Gateway**: 47 obstacles, 18 000 px, 450 px/s (original)
+- **Level 2 — Storm Front**: 46 obstacles, 18 000 px, 550 px/s; tighter gaps, more triples
+- **Level 3 — The Void**: 48 obstacles, 16 000 px, 650 px/s; relentless all-triple patterns
+- Unlock: L2 requires L1 ≥ 25%; L3 requires L2 ≥ 50%
+
+## Key Implementation Details (level select)
+- **LevelSelectScene.ts** — new scene; loads personal bests async, then renders 3 interactive cards
+- **MenuScene** SOLO PLAY → LevelSelectScene (not GameScene directly)
+- **GameScene** reads `levelIndex` from registry on `create()`; sets `this.speed`, `this.worldW`, `this.levelData`, `this.saveKey` accordingly
+- Global leaderboard submitted only for Level 1 (`levelIdx === 0`); Levels 2/3 save personal best only
+- Death dialog "Main Menu" → LevelSelectScene; restart preserves `levelIndex` in registry
+- Win screen shows "Level Select" + "Next Level" buttons instead of auto-restarting
+- `returnToMenu()` → LevelSelectScene for solo, MenuScene for multiplayer
+
 ## What Changed This Turn
-- Increased spacing between all obstacles by ~100px per gap; level width extended from 13 000px to 18 000px
+- Added level select screen with 3 levels (The Gateway, Storm Front, The Void); each with distinct speed/patterns/unlock requirement

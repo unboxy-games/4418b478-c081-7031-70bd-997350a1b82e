@@ -36,6 +36,47 @@ const LEVEL: [number, OType, number][] = [
   [15980, 's', 3], [16370, 's', 2], [16760, 's', 3],
 ];
 
+/** Level 2 — Storm Front (speed 550, 18 000 px) — tighter gaps, more triples */
+const LEVEL_2: [number, OType, number][] = [
+  [  700, 's', 1], [ 1020, 's', 2], [ 1360, 's', 1], [ 1700, 's', 2], [ 2040, 's', 3],
+  [ 2440, 'b', 1], [ 2780, 's', 2], [ 3120, 's', 3], [ 3480, 'b', 1],
+  [ 3840, 's', 2], [ 4200, 's', 3], [ 4560, 'b', 2], [ 4940, 's', 3],
+  [ 5320, 's', 2], [ 5680, 's', 3], [ 6040, 'b', 1], [ 6400, 's', 3],
+  [ 6760, 's', 3], [ 7120, 'b', 2], [ 7480, 's', 2], [ 7840, 's', 3],
+  [ 8200, 's', 3], [ 8560, 'b', 2], [ 8920, 's', 3], [ 9280, 's', 2],
+  [ 9640, 's', 3], [10000, 'b', 1], [10360, 's', 3], [10720, 's', 2],
+  [11080, 's', 3], [11440, 'b', 2], [11800, 's', 3], [12160, 's', 3],
+  [12520, 's', 2], [12880, 's', 3], [13240, 'b', 2], [13600, 's', 3],
+  [13960, 's', 3], [14320, 's', 2], [14680, 's', 3], [15040, 'b', 1],
+  [15400, 's', 3], [15760, 's', 2], [16120, 's', 3], [16480, 's', 3],
+  [16840, 's', 2], [17200, 's', 3],
+];
+
+/** Level 3 — The Void (speed 650, 16 000 px) — relentless, no breathing room */
+const LEVEL_3: [number, OType, number][] = [
+  [  500, 's', 2], [  820, 's', 3], [ 1140, 's', 2], [ 1460, 's', 3],
+  [ 1780, 'b', 2], [ 2100, 's', 3], [ 2420, 's', 3], [ 2740, 'b', 1],
+  [ 3060, 's', 3], [ 3380, 's', 2], [ 3700, 's', 3], [ 4020, 'b', 2],
+  [ 4340, 's', 3], [ 4660, 's', 3], [ 4980, 's', 2], [ 5300, 'b', 1],
+  [ 5620, 's', 3], [ 5940, 's', 3], [ 6260, 'b', 2], [ 6580, 's', 3],
+  [ 6900, 's', 2], [ 7220, 's', 3], [ 7540, 'b', 1], [ 7860, 's', 3],
+  [ 8180, 's', 3], [ 8500, 's', 2], [ 8820, 'b', 2], [ 9140, 's', 3],
+  [ 9460, 's', 3], [ 9780, 's', 2], [10100, 'b', 1], [10420, 's', 3],
+  [10740, 's', 3], [11060, 's', 3], [11380, 'b', 2], [11700, 's', 3],
+  [12020, 's', 2], [12340, 's', 3], [12660, 'b', 1], [12980, 's', 3],
+  [13300, 's', 3], [13620, 's', 2], [13940, 'b', 2], [14260, 's', 3],
+  [14580, 's', 3], [14900, 's', 3], [15220, 's', 2], [15540, 's', 3],
+];
+
+const ALL_LEVELS = [LEVEL, LEVEL_2, LEVEL_3];
+
+/** Per-level configuration */
+const LEVEL_CONFIGS = [
+  { name: 'The Gateway', speed: 450, worldW: 18000, saveKey: 'highScore'   },
+  { name: 'Storm Front', speed: 550, worldW: 18000, saveKey: 'highScore_2' },
+  { name: 'The Void',    speed: 650, worldW: 16000, saveKey: 'highScore_3' },
+];
+
 // ── NPC Bot types & configuration ─────────────────────────────────────────────
 
 interface NpcJumpEvent { atX: number }
@@ -99,6 +140,13 @@ export class GameScene extends Phaser.Scene {
   private deathFx!:      Phaser.GameObjects.Particles.ParticleEmitter;
   private dustFx!:       Phaser.GameObjects.Particles.ParticleEmitter;
 
+  // ── per-level config (set in create() from registry) ─────────────────────
+  private levelIdx   = 0;
+  private speed      = 450;
+  private worldW     = 18000;
+  private levelData: [number, OType, number][] = LEVEL;
+  private saveKey    = 'highScore';
+
   private alive              = true;
   private attempt            = 1;
   private wasGrounded        = false;
@@ -147,7 +195,15 @@ export class GameScene extends Phaser.Scene {
     this.attempt         = (this.game.registry.get('attempt') as number) ?? 1;
     this.currentRunMaxPct = 0;
 
-    this.physics.world.setBounds(0, 0, WORLD_W, GAME_HEIGHT);
+    // Resolve level-specific config from registry
+    this.levelIdx  = (this.game.registry.get('levelIndex') as number) ?? 0;
+    const lvlCfg   = LEVEL_CONFIGS[this.levelIdx] ?? LEVEL_CONFIGS[0];
+    this.speed     = lvlCfg.speed;
+    this.worldW    = lvlCfg.worldW;
+    this.levelData = ALL_LEVELS[this.levelIdx] ?? LEVEL;
+    this.saveKey   = lvlCfg.saveKey;
+
+    this.physics.world.setBounds(0, 0, this.worldW, GAME_HEIGHT);
     this.physics.world.gravity.y = GRAVITY;
 
     // Detect multiplayer mode early so buildNpcs() knows how many bots to create
@@ -180,7 +236,7 @@ export class GameScene extends Phaser.Scene {
     const grounded = body.blocked.down;
 
     // auto-scroll
-    body.setVelocityX(SPEED);
+    body.setVelocityX(this.speed);
 
     // ── cube rotation ──
     if (!grounded) {
@@ -209,14 +265,14 @@ export class GameScene extends Phaser.Scene {
     this.bgLayers.forEach((layer, i) => { layer.tilePositionX = cx * speeds[i]; });
 
     // ── progress bar ──
-    const pct    = Math.min(this.player.x / WORLD_W, 1);
+    const pct    = Math.min(this.player.x / this.worldW, 1);
     const pctInt = Math.floor(pct * 100);
     this.progressFill.setSize((GAME_WIDTH - 60) * pct, 8);
     this.percentTxt.setText(pctInt + '%');
     if (pctInt > this.currentRunMaxPct) this.currentRunMaxPct = pctInt;
 
     // ── win check ──
-    if (this.player.x >= WORLD_W - 300) this.onWin();
+    if (this.player.x >= this.worldW - 300) this.onWin();
 
     // ── fall-off check: treat dropping below the screen as a death ──
     if (this.player.y > GAME_HEIGHT + 100) this.onDeath();
@@ -450,22 +506,22 @@ export class GameScene extends Phaser.Scene {
 
   private buildGround(): void {
     // Visual tiled surface
-    this.add.tileSprite(0, GROUND_TOP, WORLD_W, GROUND_H, 'groundTile')
+    this.add.tileSprite(0, GROUND_TOP, this.worldW, GROUND_H, 'groundTile')
       .setOrigin(0, 0).setDepth(5);
 
     // Glow line along the top edge
     const glow = this.add.graphics().setDepth(6);
     glow.lineStyle(4, 0x2266cc, 0.75);
-    glow.lineBetween(0, GROUND_TOP, WORLD_W, GROUND_TOP);
+    glow.lineBetween(0, GROUND_TOP, this.worldW, GROUND_TOP);
     glow.lineStyle(10, 0x0d3399, 0.2);
-    glow.lineBetween(0, GROUND_TOP, WORLD_W, GROUND_TOP);
+    glow.lineBetween(0, GROUND_TOP, this.worldW, GROUND_TOP);
 
     // Invisible static physics body spanning the full world width.
     // Using add.rectangle + physics.add.existing so the body dimensions
     // are derived directly from the Rectangle's width/height — much more
     // reliable than manually calling setSize on a tiny staticImage.
     this.groundStatic = this.add
-      .rectangle(WORLD_W / 2, GROUND_TOP + GROUND_H / 2, WORLD_W, GROUND_H)
+      .rectangle(this.worldW / 2, GROUND_TOP + GROUND_H / 2, this.worldW, GROUND_H)
       .setAlpha(0)
       .setDepth(5);
     this.physics.add.existing(this.groundStatic, true); // true = static body
@@ -477,7 +533,7 @@ export class GameScene extends Phaser.Scene {
     this.obstacles = this.physics.add.staticGroup();  // spikes
     this.platforms = this.physics.add.staticGroup();  // landable blocks
 
-    LEVEL.forEach(([wx, type, count]) => {
+    this.levelData.forEach(([wx, type, count]) => {
       for (let i = 0; i < count; i++) {
         const ox = wx + i * B + B / 2;
         const oy = GROUND_TOP - B / 2;
@@ -565,7 +621,7 @@ export class GameScene extends Phaser.Scene {
    */
   private computeJumpSchedule(jumpDistance: number, mistakeRate: number): NpcJumpEvent[] {
     const schedule: NpcJumpEvent[] = [];
-    for (const [wx] of LEVEL) {
+    for (const [wx] of this.levelData) {
       if (Math.random() < mistakeRate) continue; // intentional miss
       // Add slight per-obstacle random variance (±20 px) so bots don't sync perfectly
       const variance = (Math.random() - 0.5) * 40;
@@ -644,7 +700,7 @@ export class GameScene extends Phaser.Scene {
       const grounded = body.blocked.down;
 
       // Auto-scroll same speed as player
-      body.setVelocityX(SPEED);
+      body.setVelocityX(this.speed);
 
       // ── rotation (mirrors player cube behaviour) ──
       if (!grounded) {
@@ -680,7 +736,7 @@ export class GameScene extends Phaser.Scene {
       if (npc.image.y > GAME_HEIGHT + 100) this.npcDeath(npc);
 
       // ── win check ──
-      if (npc.image.x >= WORLD_W - 300) this.npcWin(npc);
+      if (npc.image.x >= this.worldW - 300) this.npcWin(npc);
     }
   }
 
@@ -735,23 +791,24 @@ export class GameScene extends Phaser.Scene {
     try {
       const unboxy = await unboxyReady;
       if (!unboxy) return;
-      const saved = await unboxy.saves.get<number>('highScore');
+      const saved = await unboxy.saves.get<number>(this.saveKey);
       this.personalBest = typeof saved === 'number' && saved > 0 ? saved : 0;
     } catch (err) {
-      console.warn('[game] failed to load highScore', err);
+      console.warn('[game] failed to load', this.saveKey, err);
     }
   }
 
-  private async saveHighScore(attempts: number): Promise<void> {
+  private async saveHighScore(pct: number): Promise<void> {
     try {
       const unboxy = await unboxyReady;
       if (!unboxy) return;
-      await unboxy.saves.set('highScore', attempts);
-      if (unboxy.isAuthenticated && unboxy.user) {
-        await this.submitLeaderboard(unboxy.user.id, unboxy.user.name ?? 'Player', attempts);
+      await unboxy.saves.set(this.saveKey, pct);
+      // Only submit to the global leaderboard for Level 1 (key = 'highScore')
+      if (this.levelIdx === 0 && unboxy.isAuthenticated && unboxy.user) {
+        await this.submitLeaderboard(unboxy.user.id, unboxy.user.name ?? 'Player', pct);
       }
     } catch (err) {
-      console.warn('[game] failed to save highScore', err);
+      console.warn('[game] failed to save', this.saveKey, err);
     }
   }
 
@@ -999,7 +1056,7 @@ export class GameScene extends Phaser.Scene {
 
   private buildCamera(): void {
     this.cameras.main
-      .setBounds(0, 0, WORLD_W, GAME_HEIGHT)
+      .setBounds(0, 0, this.worldW, GAME_HEIGHT)
       .startFollow(this.player, true, 0.12, 1)
       .setFollowOffset(-200, 0); // keeps player ~1/3 from left, showing more ahead
   }
@@ -1283,9 +1340,11 @@ export class GameScene extends Phaser.Scene {
 
     dialog.modal(undefined, (result: { index: number }) => {
       if (result.index === 0) {
+        // Preserve levelIndex so the restarted scene loads the same level
+        this.game.registry.set('levelIndex', this.levelIdx);
         this.scene.restart();
       } else {
-        this.scene.start('MenuScene');
+        this.scene.start('LevelSelectScene');
       }
     });
   }
@@ -1340,7 +1399,8 @@ export class GameScene extends Phaser.Scene {
     try { activeRoom?.leave(); } catch (_) { /* ignore */ }
     clearActiveRoom();
     this.game.registry.set('multiplayer', false);
-    this.scene.start('MenuScene');
+    // Online play returns to main menu; solo returns to level select
+    this.scene.start(this.isMultiplayer ? 'MenuScene' : 'LevelSelectScene');
   }
 
   private onWin(): void {
@@ -1428,8 +1488,46 @@ export class GameScene extends Phaser.Scene {
       // Return to menu after celebration
       this.time.delayedCall(4000, () => this.returnToMenu());
     } else {
-      this.game.registry.set('attempt', 1);
-      this.time.delayedCall(5000, () => this.scene.restart());
+      // ── solo: show Level Select + optional Next Level buttons ──
+      this.time.delayedCall(1800, () => {
+        const hasNext = this.levelIdx < LEVEL_CONFIGS.length - 1;
+
+        const btnY   = GAME_HEIGHT / 2 + (hasNext ? 108 : 108);
+        const btnX1  = hasNext ? GAME_WIDTH / 2 - 120 : GAME_WIDTH / 2;
+        const btnX2  = GAME_WIDTH / 2 + 120;
+
+        // "Level Select" button
+        const selBtn = this.add.text(btnX1, btnY, '≡  Level Select', {
+          fontSize: '22px', color: '#88aaff', fontStyle: 'bold',
+          fontFamily: 'Arial', stroke: '#000033', strokeThickness: 3,
+        }).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0)
+          .setInteractive({ useHandCursor: true });
+        this.tweens.add({ targets: selBtn, alpha: 1, duration: 400 });
+        selBtn.on('pointerover', () => selBtn.setStyle({ color: '#bbddff' }));
+        selBtn.on('pointerout',  () => selBtn.setStyle({ color: '#88aaff' }));
+        selBtn.on('pointerdown', () => {
+          this.game.registry.set('attempt', 1);
+          this.scene.start('LevelSelectScene');
+        });
+
+        // "Next Level" button (only if one exists)
+        if (hasNext) {
+          const nextCfg = LEVEL_CONFIGS[this.levelIdx + 1];
+          const nxtBtn  = this.add.text(btnX2, btnY, `▶  ${nextCfg.name}`, {
+            fontSize: '22px', color: '#ffdd44', fontStyle: 'bold',
+            fontFamily: 'Arial', stroke: '#000033', strokeThickness: 3,
+          }).setScrollFactor(0).setDepth(30).setOrigin(0.5).setAlpha(0)
+            .setInteractive({ useHandCursor: true });
+          this.tweens.add({ targets: nxtBtn, alpha: 1, duration: 400 });
+          nxtBtn.on('pointerover', () => nxtBtn.setStyle({ color: '#ffffff' }));
+          nxtBtn.on('pointerout',  () => nxtBtn.setStyle({ color: '#ffdd44' }));
+          nxtBtn.on('pointerdown', () => {
+            this.game.registry.set('levelIndex', this.levelIdx + 1);
+            this.game.registry.set('attempt', 1);
+            this.scene.restart();
+          });
+        }
+      });
     }
   }
 }

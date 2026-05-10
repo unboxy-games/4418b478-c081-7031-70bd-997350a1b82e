@@ -186,7 +186,7 @@ export class MenuScene extends Phaser.Scene {
 
   private buildButtons(): void {
     this.makeButton(GAME_WIDTH / 2, 335, 'SOLO PLAY', 0x1155cc, 0x2277ff, () => {
-      this.scene.start('GameScene');
+      this.scene.start('LevelSelectScene');
     }, 0);
 
     this.makeButton(GAME_WIDTH / 2, 425, 'ONLINE CO-OP  🌐', 0x116633, 0x22aa55, () => {
