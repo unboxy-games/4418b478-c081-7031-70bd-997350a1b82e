@@ -15,7 +15,7 @@
 - Particle burst (14 mixed shapes) + button squish + count bounce on each local click
 - Idle pulse tween on the CLICK! button
 - Neon arcade visual theme: dark navy/gradient background, subtle grid, cyan (#00ffcc) accent, teal button
-- **Auto-clicker toggle** (⚡ AUTO: OFF/ON) below the click count — 5 CPS via `time.addEvent`, cleans up on shutdown
+- **Auto-clicker upgrade** (⚡ BUY AUTO +1 CPS) — costs 10 clicks per purchase, stacks indefinitely; button glows cyan when affordable; auto timer restarts at new rate after each upgrade; auto-clicks fire with lighter particle count (4 vs 14)
 
 ## Key implementation details
 - `Unboxy.init()` is called at module load in `main.ts` and exported as `unboxyReady`
@@ -29,8 +29,8 @@
 - Mouse click on the CLICK! button
 
 ## What changed this turn
-- Added auto-clicker toggle button (⚡ AUTO: OFF / ON) below the click count display
-- Fires at 5 clicks/second via `this.time.addEvent` when enabled
-- Active state: teal color, cyan glowing border, subtle pulsing scale, "5 CLICKS / SEC" status text
-- Inactive state: dim navy, no animation
-- Timer properly removed on scene shutdown
+- Reworked auto-clicker into a purchasable upgrade: costs 10 clicks per +1 CPS (stacks)
+- Button glows cyan when player can afford it; stays dim when they can't
+- Each purchase deducts 10 from click count, increments CPS, restarts the auto timer
+- Auto-clicks use isAuto=true flag: no button squish tween + only 4 particles (vs 14) to stay tidy at high CPS
+- "AUTO: X CPS" status below button pops on each upgrade

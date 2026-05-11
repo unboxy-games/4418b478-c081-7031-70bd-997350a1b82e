@@ -28,15 +28,15 @@ export class GameScene extends Phaser.Scene {
   private idleTween: Phaser.Tweens.Tween | null = null;
   private connectingText!: Phaser.GameObjects.Text;
 
-  // Auto-clicker
-  private autoClickEnabled = false;
+  // Auto-clicker (purchased upgrade — costs COST_PER_LEVEL clicks per +1 CPS)
+  private static readonly COST_PER_LEVEL = 10;
+  private autoClickCPS = 0;          // current purchased CPS
   private autoClickTimer: Phaser.Time.TimerEvent | null = null;
-  private autoClickCPS = 5;
   private autoBtn!: Phaser.GameObjects.Container;
   private autoBtnBg!: Phaser.GameObjects.Graphics;
   private autoBtnLabel!: Phaser.GameObjects.Text;
-  private autoStatusText!: Phaser.GameObjects.Text;
-  private autoBorderTween: Phaser.Tweens.Tween | null = null;
+  private autoCpsText!: Phaser.GameObjects.Text;
+  private autoCostText!: Phaser.GameObjects.Text;
 
   constructor() {
     super({ key: 'GameScene' });
@@ -263,7 +263,7 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(3);
 
-    // ── Auto-clicker button ───────────────────────────────────────────
+    // ── Auto-clicker upgrade button ───────────────────────────────────
     const abx = cx;
     const aby = cy + 285;
 
@@ -272,22 +272,19 @@ export class GameScene extends Phaser.Scene {
     // Shadow
     const aShadow = this.add.graphics();
     aShadow.fillStyle(0x000000, 0.45);
-    aShadow.fillRoundedRect(-96, -28, 192, 56, 14);
+    aShadow.fillRoundedRect(-110, -36, 220, 72, 14);
     aShadow.x = 5; aShadow.y = 7;
     this.autoBtn.add(aShadow);
 
-    // Background
+    // Background (redrawn on each purchase)
     this.autoBtnBg = this.add.graphics();
-    this.autoBtnBg.fillStyle(0x0a1a2e, 1);
-    this.autoBtnBg.fillRoundedRect(-96, -28, 192, 56, 14);
-    this.autoBtnBg.lineStyle(2, 0x1e4466, 1);
-    this.autoBtnBg.strokeRoundedRect(-96, -28, 192, 56, 14);
     this.autoBtn.add(this.autoBtnBg);
+    this.redrawAutoBtn(false); // initial: can't afford
 
-    // Label
+    // Top label: "⚡ BUY AUTO"
     this.autoBtnLabel = this.add
-      .text(0, 0, '⚡ AUTO: OFF', {
-        fontSize: '18px',
+      .text(0, -14, '⚡ BUY AUTO  +1 CPS', {
+        fontSize: '15px',
         fontStyle: 'bold',
         color: '#335566',
         stroke: '#000a12',
@@ -296,86 +293,110 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5);
     this.autoBtn.add(this.autoBtnLabel);
 
+    // Cost sub-label
+    this.autoCostText = this.add
+      .text(0, 10, `COST: ${GameScene.COST_PER_LEVEL} CLICKS`, {
+        fontSize: '12px',
+        color: '#2a4455',
+        letterSpacing: 2,
+      })
+      .setOrigin(0.5);
+    this.autoBtn.add(this.autoCostText);
+
     // Interactive zone
-    const aZone = this.add.zone(0, 0, 192, 56).setInteractive({ useHandCursor: true });
+    const aZone = this.add.zone(0, 0, 220, 72).setInteractive({ useHandCursor: true });
     this.autoBtn.add(aZone);
 
     aZone.on('pointerover', () => {
-      if (!this.autoClickEnabled) {
+      if (this.localClicks >= GameScene.COST_PER_LEVEL) {
         this.tweens.add({ targets: this.autoBtn, scaleX: 1.06, scaleY: 1.06, duration: 100 });
       }
     });
     aZone.on('pointerout', () => {
-      if (!this.autoClickEnabled) {
-        this.tweens.add({ targets: this.autoBtn, scaleX: 1.0, scaleY: 1.0, duration: 120 });
-      }
+      this.tweens.add({ targets: this.autoBtn, scaleX: 1.0, scaleY: 1.0, duration: 120 });
     });
-    aZone.on('pointerdown', () => this.toggleAutoClick(cx, cy - 20));
+    aZone.on('pointerdown', () => this.purchaseAutoClick(cx, cy - 20));
 
-    // Status line below button
-    this.autoStatusText = this.add
-      .text(abx, aby + 44, '', {
-        fontSize: '11px',
-        color: '#2a5544',
-        letterSpacing: 3,
+    // CPS status displayed separately below button
+    this.autoCpsText = this.add
+      .text(abx, aby + 54, 'AUTO: 0 CPS', {
+        fontSize: '13px',
+        color: '#1e3344',
+        letterSpacing: 4,
       })
       .setOrigin(0.5)
       .setDepth(3);
   }
 
-  private toggleAutoClick(particleX: number, particleY: number): void {
-    this.autoClickEnabled = !this.autoClickEnabled;
-
-    if (this.autoClickEnabled) {
-      // Style: active state
-      this.autoBtnBg.clear();
+  /** Redraw the buy button based on whether the player can afford it. */
+  private redrawAutoBtn(canAfford: boolean): void {
+    this.autoBtnBg.clear();
+    if (canAfford) {
       this.autoBtnBg.fillStyle(0x003d28, 1);
-      this.autoBtnBg.fillRoundedRect(-96, -28, 192, 56, 14);
-      this.autoBtnBg.lineStyle(2, 0x00ffcc, 0.9);
-      this.autoBtnBg.strokeRoundedRect(-96, -28, 192, 56, 14);
-      this.autoBtnLabel.setText('⚡ AUTO: ON');
-      this.autoBtnLabel.setColor('#00ffcc');
-
-      // Pulsing border tween (scale the button slightly)
-      this.autoBorderTween = this.tweens.add({
-        targets: this.autoBtn,
-        scaleX: 1.04,
-        scaleY: 1.04,
-        duration: 500,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
-
-      this.autoStatusText.setText(`${this.autoClickCPS} CLICKS / SEC`);
-      this.autoStatusText.setColor('#007755');
-
-      // Start firing
-      this.autoClickTimer = this.time.addEvent({
-        delay: Math.round(1000 / this.autoClickCPS),
-        loop: true,
-        callback: () => {
-          this.handleClick(particleX, particleY);
-        },
-      });
+      this.autoBtnBg.fillRoundedRect(-110, -36, 220, 72, 14);
+      this.autoBtnBg.lineStyle(2, 0x00ffcc, 0.85);
+      this.autoBtnBg.strokeRoundedRect(-110, -36, 220, 72, 14);
     } else {
-      // Style: inactive state
-      this.autoBtnBg.clear();
       this.autoBtnBg.fillStyle(0x0a1a2e, 1);
-      this.autoBtnBg.fillRoundedRect(-96, -28, 192, 56, 14);
-      this.autoBtnBg.lineStyle(2, 0x1e4466, 1);
-      this.autoBtnBg.strokeRoundedRect(-96, -28, 192, 56, 14);
-      this.autoBtnLabel.setText('⚡ AUTO: OFF');
-      this.autoBtnLabel.setColor('#335566');
-
-      this.autoBorderTween?.stop();
-      this.autoBtn.setScale(1.0);
-
-      this.autoStatusText.setText('');
-
-      this.autoClickTimer?.remove();
-      this.autoClickTimer = null;
+      this.autoBtnBg.fillRoundedRect(-110, -36, 220, 72, 14);
+      this.autoBtnBg.lineStyle(2, 0x1e3344, 1);
+      this.autoBtnBg.strokeRoundedRect(-110, -36, 220, 72, 14);
     }
+  }
+
+  /** Spend clicks to gain +1 CPS on the auto-clicker. */
+  private purchaseAutoClick(particleX: number, particleY: number): void {
+    if (this.localClicks < GameScene.COST_PER_LEVEL) return;
+
+    // Deduct cost
+    this.localClicks -= GameScene.COST_PER_LEVEL;
+    this.myCountText.setText(String(this.localClicks));
+    if (this.room) this.room.player.set('clicks', this.localClicks);
+
+    // Level up
+    this.autoClickCPS += 1;
+
+    // Flash the buy button cyan on purchase
+    this.tweens.add({
+      targets: this.autoBtn,
+      scaleX: 1.12,
+      scaleY: 1.12,
+      duration: 90,
+      yoyo: true,
+      ease: 'Back.easeOut',
+    });
+
+    // Update CPS display
+    this.autoCpsText.setText(`AUTO: ${this.autoClickCPS} CPS`);
+    this.autoCpsText.setColor('#00ffcc');
+    this.tweens.add({
+      targets: this.autoCpsText,
+      scaleX: 1.4,
+      scaleY: 1.4,
+      duration: 120,
+      yoyo: true,
+      ease: 'Back.easeOut',
+    });
+
+    // Refresh button appearance
+    this.redrawAutoBtn(this.localClicks >= GameScene.COST_PER_LEVEL);
+    this.autoBtnLabel.setColor(this.localClicks >= GameScene.COST_PER_LEVEL ? '#00ffcc' : '#335566');
+
+    // Restart timer at new rate
+    this.autoClickTimer?.remove();
+    this.autoClickTimer = this.time.addEvent({
+      delay: Math.round(1000 / this.autoClickCPS),
+      loop: true,
+      callback: () => this.handleClick(particleX, particleY, true),
+    });
+  }
+
+  /** Called after every click (manual or auto) to refresh button affordability. */
+  private refreshAutoBtn(): void {
+    const canAfford = this.localClicks >= GameScene.COST_PER_LEVEL;
+    this.redrawAutoBtn(canAfford);
+    this.autoBtnLabel.setColor(canAfford ? '#00ffcc' : '#335566');
+    this.autoCostText.setColor(canAfford ? '#55aa88' : '#2a4455');
   }
 
   private startIdlePulse(): void {
@@ -390,7 +411,7 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private handleClick(particleX: number, particleY: number): void {
+  private handleClick(particleX: number, particleY: number, isAuto = false): void {
     this.localClicks++;
     this.myCountText.setText(String(this.localClicks));
 
@@ -399,18 +420,20 @@ export class GameScene extends Phaser.Scene {
       this.room.player.set('clicks', this.localClicks);
     }
 
-    // Button squish
-    this.idleTween?.stop();
-    this.clickButton.setScale(1.0);
-    this.tweens.add({
-      targets: this.clickButton,
-      scaleX: 0.90,
-      scaleY: 0.90,
-      duration: 55,
-      yoyo: true,
-      ease: 'Power2',
-      onComplete: () => this.startIdlePulse(),
-    });
+    // Button squish (lighter when auto-clicking to avoid tween flood)
+    if (!isAuto) {
+      this.idleTween?.stop();
+      this.clickButton.setScale(1.0);
+      this.tweens.add({
+        targets: this.clickButton,
+        scaleX: 0.90,
+        scaleY: 0.90,
+        duration: 55,
+        yoyo: true,
+        ease: 'Power2',
+        onComplete: () => this.startIdlePulse(),
+      });
+    }
 
     // Count pop
     this.tweens.add({
@@ -422,12 +445,16 @@ export class GameScene extends Phaser.Scene {
       ease: 'Back.easeOut',
     });
 
-    this.spawnParticles(particleX, particleY);
+    // Fewer particles during auto-click to keep things tidy
+    this.spawnParticles(particleX, particleY, isAuto ? 4 : 14);
+
+    // Refresh buy-button glow whenever click count changes
+    if (this.autoBtn?.active) this.refreshAutoBtn();
   }
 
-  private spawnParticles(x: number, y: number): void {
+  private spawnParticles(x: number, y: number, count = 14): void {
     const colors = [0x00ffcc, 0xff6b9d, 0xffd700, 0x44aaff, 0xffffff, 0xff9944];
-    for (let i = 0; i < 14; i++) {
+    for (let i = 0; i < count; i++) {
       const g = this.add.graphics().setDepth(4);
       g.fillStyle(Phaser.Utils.Array.GetRandom(colors) as number, 1);
       const size = Phaser.Math.Between(3, 9);
