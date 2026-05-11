@@ -28,6 +28,16 @@ export class GameScene extends Phaser.Scene {
   private idleTween: Phaser.Tweens.Tween | null = null;
   private connectingText!: Phaser.GameObjects.Text;
 
+  // Auto-clicker
+  private autoClickEnabled = false;
+  private autoClickTimer: Phaser.Time.TimerEvent | null = null;
+  private autoClickCPS = 5;
+  private autoBtn!: Phaser.GameObjects.Container;
+  private autoBtnBg!: Phaser.GameObjects.Graphics;
+  private autoBtnLabel!: Phaser.GameObjects.Text;
+  private autoStatusText!: Phaser.GameObjects.Text;
+  private autoBorderTween: Phaser.Tweens.Tween | null = null;
+
   constructor() {
     super({ key: 'GameScene' });
   }
@@ -75,6 +85,7 @@ export class GameScene extends Phaser.Scene {
 
     this.events.once('shutdown', () => {
       this.unsubs.forEach((off) => off());
+      this.autoClickTimer?.remove();
       this.room?.leave();
     });
   }
@@ -251,6 +262,120 @@ export class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(3);
+
+    // ── Auto-clicker button ───────────────────────────────────────────
+    const abx = cx;
+    const aby = cy + 285;
+
+    this.autoBtn = this.add.container(abx, aby).setDepth(3);
+
+    // Shadow
+    const aShadow = this.add.graphics();
+    aShadow.fillStyle(0x000000, 0.45);
+    aShadow.fillRoundedRect(-96, -28, 192, 56, 14);
+    aShadow.x = 5; aShadow.y = 7;
+    this.autoBtn.add(aShadow);
+
+    // Background
+    this.autoBtnBg = this.add.graphics();
+    this.autoBtnBg.fillStyle(0x0a1a2e, 1);
+    this.autoBtnBg.fillRoundedRect(-96, -28, 192, 56, 14);
+    this.autoBtnBg.lineStyle(2, 0x1e4466, 1);
+    this.autoBtnBg.strokeRoundedRect(-96, -28, 192, 56, 14);
+    this.autoBtn.add(this.autoBtnBg);
+
+    // Label
+    this.autoBtnLabel = this.add
+      .text(0, 0, '⚡ AUTO: OFF', {
+        fontSize: '18px',
+        fontStyle: 'bold',
+        color: '#335566',
+        stroke: '#000a12',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5);
+    this.autoBtn.add(this.autoBtnLabel);
+
+    // Interactive zone
+    const aZone = this.add.zone(0, 0, 192, 56).setInteractive({ useHandCursor: true });
+    this.autoBtn.add(aZone);
+
+    aZone.on('pointerover', () => {
+      if (!this.autoClickEnabled) {
+        this.tweens.add({ targets: this.autoBtn, scaleX: 1.06, scaleY: 1.06, duration: 100 });
+      }
+    });
+    aZone.on('pointerout', () => {
+      if (!this.autoClickEnabled) {
+        this.tweens.add({ targets: this.autoBtn, scaleX: 1.0, scaleY: 1.0, duration: 120 });
+      }
+    });
+    aZone.on('pointerdown', () => this.toggleAutoClick(cx, cy - 20));
+
+    // Status line below button
+    this.autoStatusText = this.add
+      .text(abx, aby + 44, '', {
+        fontSize: '11px',
+        color: '#2a5544',
+        letterSpacing: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(3);
+  }
+
+  private toggleAutoClick(particleX: number, particleY: number): void {
+    this.autoClickEnabled = !this.autoClickEnabled;
+
+    if (this.autoClickEnabled) {
+      // Style: active state
+      this.autoBtnBg.clear();
+      this.autoBtnBg.fillStyle(0x003d28, 1);
+      this.autoBtnBg.fillRoundedRect(-96, -28, 192, 56, 14);
+      this.autoBtnBg.lineStyle(2, 0x00ffcc, 0.9);
+      this.autoBtnBg.strokeRoundedRect(-96, -28, 192, 56, 14);
+      this.autoBtnLabel.setText('⚡ AUTO: ON');
+      this.autoBtnLabel.setColor('#00ffcc');
+
+      // Pulsing border tween (scale the button slightly)
+      this.autoBorderTween = this.tweens.add({
+        targets: this.autoBtn,
+        scaleX: 1.04,
+        scaleY: 1.04,
+        duration: 500,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+
+      this.autoStatusText.setText(`${this.autoClickCPS} CLICKS / SEC`);
+      this.autoStatusText.setColor('#007755');
+
+      // Start firing
+      this.autoClickTimer = this.time.addEvent({
+        delay: Math.round(1000 / this.autoClickCPS),
+        loop: true,
+        callback: () => {
+          this.handleClick(particleX, particleY);
+        },
+      });
+    } else {
+      // Style: inactive state
+      this.autoBtnBg.clear();
+      this.autoBtnBg.fillStyle(0x0a1a2e, 1);
+      this.autoBtnBg.fillRoundedRect(-96, -28, 192, 56, 14);
+      this.autoBtnBg.lineStyle(2, 0x1e4466, 1);
+      this.autoBtnBg.strokeRoundedRect(-96, -28, 192, 56, 14);
+      this.autoBtnLabel.setText('⚡ AUTO: OFF');
+      this.autoBtnLabel.setColor('#335566');
+
+      this.autoBorderTween?.stop();
+      this.autoBtn.setScale(1.0);
+
+      this.autoStatusText.setText('');
+
+      this.autoClickTimer?.remove();
+      this.autoClickTimer = null;
+    }
   }
 
   private startIdlePulse(): void {

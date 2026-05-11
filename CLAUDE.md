@@ -15,6 +15,7 @@
 - Particle burst (14 mixed shapes) + button squish + count bounce on each local click
 - Idle pulse tween on the CLICK! button
 - Neon arcade visual theme: dark navy/gradient background, subtle grid, cyan (#00ffcc) accent, teal button
+- **Auto-clicker toggle** (⚡ AUTO: OFF/ON) below the click count — 5 CPS via `time.addEvent`, cleans up on shutdown
 
 ## Key implementation details
 - `Unboxy.init()` is called at module load in `main.ts` and exported as `unboxyReady`
@@ -28,4 +29,8 @@
 - Mouse click on the CLICK! button
 
 ## What changed this turn
-- Built the entire game from scratch: main.ts Unboxy.init export, full GameScene with multiplayer rooms, polished visuals, UIScene simplified
+- Added auto-clicker toggle button (⚡ AUTO: OFF / ON) below the click count display
+- Fires at 5 clicks/second via `this.time.addEvent` when enabled
+- Active state: teal color, cyan glowing border, subtle pulsing scale, "5 CLICKS / SEC" status text
+- Inactive state: dim navy, no animation
+- Timer properly removed on scene shutdown
